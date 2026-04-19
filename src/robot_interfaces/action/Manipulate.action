@@ -1,0 +1,12 @@
+# Goal
+string object_id
+string action
+---
+# Result
+bool success
+string message
+string error_code
+---
+# Feedback
+string status
+float32 progress
