@@ -1,0 +1,9 @@
+# Goal
+int8 action_code
+---
+# Result
+bool success
+string message
+---
+# Feedback
+bool success
