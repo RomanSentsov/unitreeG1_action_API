@@ -24,6 +24,8 @@
 
 #include "g1_manip_interf_test1/action/test_server_exec.hpp"
 
+#include <torch/script.h>         
+#include <moveit_msgs/srv/get_state_validity.hpp>
 using namespace std::placeholders;
 
 // ====================================================================
@@ -115,6 +117,73 @@ struct MotorState {
 };
 
 // ====================================================================
+// Классы для нейросети и проверки коллизий
+// ====================================================================
+class NeuralPolicy {
+public:
+    NeuralPolicy(const std::string& model_path) {
+        try {
+            module_ = torch::jit::load(model_path);
+            module_.eval();
+            RCLCPP_INFO(rclcpp::get_logger("NeuralPolicy"), "Model loaded: %s", model_path.c_str());
+        } catch (const c10::Error& e) {
+            RCLCPP_ERROR(rclcpp::get_logger("NeuralPolicy"), "Error loading model: %s", e.what());
+            throw;
+        }
+    }
+
+    std::vector<float> act(const std::vector<float>& observation) {
+        torch::Tensor input = torch::tensor(observation).view({1, (int64_t)observation.size()});
+        torch::NoGradGuard no_grad;
+        torch::Tensor output = module_.forward({input}).toTensor();
+        output = output.squeeze().to(torch::kCPU);
+        std::vector<float> result(output.data_ptr<float>(), output.data_ptr<float>() + output.numel());
+        return result;
+    }
+
+private:
+    torch::jit::script::Module module_;
+};
+
+class CollisionChecker {
+public:
+    CollisionChecker(rclcpp::Node::SharedPtr node) : node_(node) {
+        client_ = node_->create_client<moveit_msgs::srv::GetStateValidity>("/check_state_validity");
+        if (!client_->wait_for_service(std::chrono::seconds(5))) {
+            RCLCPP_ERROR(node_->get_logger(), "MoveIt service /check_state_validity not available");
+        } else {
+            RCLCPP_INFO(node_->get_logger(), "Collision checker ready");
+        }
+    }
+
+    bool isValid(const std::vector<std::string>& joint_names,
+                 const std::vector<double>& positions) {
+        if (joint_names.size() != positions.size()) {
+            RCLCPP_ERROR(node_->get_logger(), "Joint names and positions size mismatch");
+            return false;
+        }
+        auto request = std::make_shared<moveit_msgs::srv::GetStateValidity::Request>();
+        request->robot_state.joint_state.name = joint_names;
+        request->robot_state.joint_state.position = positions;
+        request->robot_state.joint_state.velocity.resize(joint_names.size(), 0.0);
+        request->robot_state.joint_state.effort.resize(joint_names.size(), 0.0);
+
+        auto future = client_->async_send_request(request);
+        if (future.wait_for(std::chrono::seconds(5)) == std::future_status::ready) {
+            auto result = future.get();
+            return result->valid;
+        } else {
+            RCLCPP_ERROR(node_->get_logger(), "MoveIt service timeout (5s)");
+            return false;
+        }
+    }
+
+private:
+    rclcpp::Node::SharedPtr node_;
+    rclcpp::Client<moveit_msgs::srv::GetStateValidity>::SharedPtr client_;
+};
+
+// ====================================================================
 // Менеджер траекторий: содержит поле с траекторией, началом выполнения, и методы для работы с ним
 // ====================================================================
 class TrajectoryManager {
@@ -194,6 +263,151 @@ private:
 };
 
 // ====================================================================
+// Нейроменеджер 
+// ====================================================================
+class NeuralActionManager {
+public:
+    NeuralActionManager(rclcpp::Node::SharedPtr node)
+        : node_(node), active_(false), disabling_(false), timeout_sec_(10.0),
+          current_action_(29, 0.0f), last_safe_command_(29, 0.0f)
+    {
+        collision_checker_ = std::make_unique<CollisionChecker>(node_);
+    }
+    bool start(const std::string& action_name, const std::string& model_path, double timeout_sec = 30.0) {
+        if (active_) stop();
+        try {
+            policy_ = std::make_unique<NeuralPolicy>(model_path);
+            RCLCPP_INFO(node_->get_logger(), "Loaded neural policy for action: %s", action_name.c_str());
+        } catch (const std::exception& e) {
+            RCLCPP_ERROR(node_->get_logger(), "Failed to load neural policy: %s", e.what());
+            return false;
+        }
+        active_ = true;
+        disabling_ = false;
+        start_time_ = std::chrono::steady_clock::now();
+        last_update_time_ = start_time_ - std::chrono::milliseconds(20);
+        timeout_sec_ = timeout_sec;
+        std::fill(current_action_.begin(), current_action_.end(), 0.0f);
+        std::fill(last_safe_command_.begin(), last_safe_command_.end(), 0.0f);
+        return true;
+    }
+    void stop() {
+        active_ = false;
+        disabling_ = false;
+        policy_.reset();
+        RCLCPP_INFO(node_->get_logger(), "NeuralActionManager stopped");
+    }
+
+    void softDisable() {
+        if (active_) disabling_ = true;
+        RCLCPP_INFO(node_->get_logger(), "NeuralActionManager soft disable started");
+    }
+
+    bool isActive() const { return active_; }
+
+    bool isTimeoutExpired() const {
+        if (!active_) return true;
+        double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - start_time_).count();
+        return elapsed > timeout_sec_;
+    }
+    bool getCurrentCommand(std::vector<float>& cmd_out, const unitree_hg::msg::LowState::SharedPtr low_state) {
+        if (!active_) return false;
+
+        auto now = std::chrono::steady_clock::now();
+        double dt = std::chrono::duration<double>(now - last_update_time_).count();
+        
+        // Обновляем нейросеть только если мы не в режиме затухания
+        if (!disabling_ && dt >= 0.02) {
+            std::vector<float> obs = buildObservation(low_state);
+            updateNeural(obs);
+            last_update_time_ = now;
+        }
+
+        // Далее обработка disabling_ (затухание для рук)...
+        if (disabling_) {
+            double elapsed = std::chrono::duration<double>(now - start_time_).count();
+            double factor = (elapsed < 2.0) ? (1.0 - elapsed/2.0) : 0.0;
+            for (int idx : ALL_ARM_MOTORS) {
+                if (idx < (int)current_action_.size())
+                    current_action_[idx] *= static_cast<float>(factor);
+            }
+            if (elapsed >= 2.0) {
+                active_ = false;
+                disabling_ = false;
+                RCLCPP_INFO(node_->get_logger(), "NeuralActionManager soft disable finished");
+            }
+        }
+
+        if (checkCollision(current_action_)) {
+            last_safe_command_ = current_action_;
+        } else {
+            RCLCPP_WARN(node_->get_logger(), "Collision detected! Using last safe command.");
+        }
+
+        cmd_out = last_safe_command_;
+        return active_;
+    }
+private:
+    std::vector<float> buildObservation(const unitree_hg::msg::LowState::SharedPtr low_state) {
+        std::vector<float> obs(633, 0.0f);
+        if (!low_state) return obs;
+
+        const auto& imu = low_state->imu_state;
+
+        // базовые угловые скорости (индексы 3..5)
+        obs[3] = imu.gyroscope[0];
+        obs[4] = imu.gyroscope[1];
+        obs[5] = imu.gyroscope[2];
+
+        // проекция гравитации (индексы 6..8)
+        float ax = imu.accelerometer[0], ay = imu.accelerometer[1], az = imu.accelerometer[2];
+        float norm = std::sqrt(ax*ax + ay*ay + az*az);
+        if (norm > 0.001f) {
+            obs[6] = ax / norm;
+            obs[7] = ay / norm;
+            obs[8] = az / norm;
+        }
+
+        // joint_pos (27) – индексы 9..35
+        for (int i = 0; i < 27; ++i) {
+            obs[9 + i] = low_state->motor_state[i].q;
+        }
+
+        // joint_vel (27) – индексы 36..62
+        for (int i = 0; i < 27; ++i) {
+            obs[36 + i] = low_state->motor_state[i].dq;
+        }
+
+        // Остальные 541 число пока нули (previous actions, target_ref, rel_pose_target)
+        return obs;
+    }
+
+    void updateNeural(const std::vector<float>& obs) {
+        if (!policy_) return;
+        std::vector<float> action = policy_->act(obs);
+        if (action.size() >= 29) {
+            current_action_ = action;
+        } else {
+            RCLCPP_WARN(node_->get_logger(), "Neural policy returned wrong size: %zu", action.size());
+        }
+    }
+
+    bool checkCollision(const std::vector<float>& /*angles*/) {
+        // TODO: реализовать через collision_checker_->isValid(...)
+        return true;
+    }
+    rclcpp::Node::SharedPtr node_;
+    std::unique_ptr<NeuralPolicy> policy_;
+    std::unique_ptr<CollisionChecker> collision_checker_;
+    bool active_;
+    bool disabling_;
+    std::chrono::steady_clock::time_point start_time_;
+    std::chrono::steady_clock::time_point last_update_time_;
+    double timeout_sec_;
+    std::vector<float> current_action_;
+    std::vector<float> last_safe_command_;
+};
+// ====================================================================
 // Главный класс сервера манипуляции
 // ====================================================================
 class ManipulationActionServer : public rclcpp::Node {
@@ -245,11 +459,15 @@ public:
         commander_timer_ = this->create_wall_timer(
             std::chrono::milliseconds(2),
             std::bind(&ManipulationActionServer::commander_callback, this));
-
+        //neural_manager_ = std::make_unique<NeuralActionManager>(shared_from_this());
         RCLCPP_INFO(this->get_logger(), "Manipulation Action Server started (architecture v2)");
         RCLCPP_INFO(this->get_logger(), "Initial state: DISABLED / HOLDING_POSE");
     }
-
+    // Инициализация нейроменеджера
+    void init() {
+        neural_manager_ = std::make_unique<NeuralActionManager>(shared_from_this());
+        RCLCPP_INFO(this->get_logger(), "NeuralActionManager initialized");
+    }
 private:
     // ====================================================================
     // Публичные методы машины состояний (API)
@@ -281,6 +499,7 @@ private:
         std::lock_guard<std::mutex> lock(state_mutex_);
         enable_control_ = EnableControl::EMERGENCY;
         trajectory_manager_.stop();
+        if (neural_manager_) neural_manager_->stop();
         state_of_action_ = StateOfAction::HOLDING_POSE;
         RCLCPP_WARN(this->get_logger(), "EMERGENCY mode activated");
     }
@@ -523,13 +742,29 @@ private:
                         break;
 
                     case StateOfAction::NEURO_DRIVEN:
-                        // Заглушка нейросети
-                        // TODO: обсчёт нейронкой, проверка валидности, при невалидности -> emergency()
-                        // Пока просто удерживаем позу
-                        for (int idx : ALL_ARM_MOTORS) {
-                            cmd.q_target[idx] = current_state->q[idx];
+                    { 
+                        if (!neural_manager_ || !neural_manager_->isActive() || !last_low_state_) {
+                        std::lock_guard<std::mutex> lock(state_mutex_);
+                            state_of_action_ = StateOfAction::HOLDING_POSE;
+                            break;
+                        }
+
+                        std::vector<float> neural_cmd;
+                        if (neural_manager_->getCurrentCommand(neural_cmd, last_low_state_)) {
+                            // Заполняем команду для всех 29 моторов
+                            for (int i = 0; i < G1_NUM_MOTOR; ++i) {
+                                if (i < (int)neural_cmd.size())
+                                    cmd.q_target[i] = neural_cmd[i];
+                                else
+                                    cmd.q_target[i] = current_state->q[i];
+                            }
+                        } else {
+                            std::lock_guard<std::mutex> lock(state_mutex_);
+                            state_of_action_ = StateOfAction::HOLDING_POSE;
+                            RCLCPP_INFO(get_logger(), "Neural action finished, switching to HOLDING_POSE");
                         }
                         break;
+                    }
                 }
                 break;
         }
@@ -616,6 +851,7 @@ private:
     // LowState callback – обновляет буфер состояния
     // ====================================================================
     void low_state_callback(const unitree_hg::msg::LowState::SharedPtr msg) {
+        last_low_state_ = msg;
         MotorState ms;
         for (int i = 0; i < G1_NUM_MOTOR; ++i) {
             ms.q[i] = msg->motor_state[i].q;
@@ -645,6 +881,7 @@ private:
         (void)goal_handle;
         RCLCPP_INFO(this->get_logger(), "Cancel requested -> stopping trajectory, moving to HOLDING_POSE");
         trajectory_manager_.stop();
+        if (neural_manager_) neural_manager_->stop();
         {
             std::lock_guard<std::mutex> lock(state_mutex_);
             state_of_action_ = StateOfAction::HOLDING_POSE;
@@ -657,9 +894,16 @@ private:
         const auto goal = goal_handle->get_goal();
 
         switch (goal->action_code) {
-            case 0:  // Button press sequence
-                std::thread([this]() { execute_button_press(); }).detach();
+            //case 0:  // Button press sequence
+               // std::thread([this]() { execute_button_press(); }).detach();
+                //break;
+            case 0:  // Button press via neural network
+            {
+                // Укажи здесь реальный путь к обученной модели .pt
+                std::string model_path = "/home/egorlekomtsev/Downloads/2026-03-31_15-52-55-Button-Press-a(1)/2026-03-31_15-52-55-Button-Press-a/exported/policy.pt";
+                std::thread([this, model_path]() { execute_neural_action(model_path); }).detach();
                 break;
+            }
         }
     }
 
@@ -691,6 +935,49 @@ private:
 
         std::this_thread::sleep_for(std::chrono::milliseconds(5000));
         //TODO: gentle_disable
+    }
+
+    void execute_neural_action(const std::string& model_path, double timeout = 30.0) {
+        RCLCPP_INFO(this->get_logger(), "Starting neural action with model: %s", model_path.c_str());
+
+        // Включаем управление руками 
+        enable();
+        // TODO: заменить "button_press" на реальное имя действия из конфигурации
+        if (!neural_manager_->start("button_press", model_path, timeout)) {
+            RCLCPP_ERROR(get_logger(), "Failed to start neural manager");
+            if (current_goal_handle_) {
+                auto result = std::make_shared<MotionPlan::Result>();
+                result->success = false;
+                current_goal_handle_->abort(result);
+                current_goal_handle_.reset();
+            }
+            return;
+        }
+
+        // Переключаем состояние сервера в NEURO_DRIVEN
+        {
+            std::lock_guard<std::mutex> lock(state_mutex_);
+            state_of_action_ = StateOfAction::NEURO_DRIVEN;
+        }
+
+        // Ждём, пока нейрорежим активен и не истёк таймаут
+        while (rclcpp::ok() && neural_manager_->isActive() && !neural_manager_->isTimeoutExpired()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        // Инициируем плавное выключение
+        neural_manager_->softDisable();
+        // Даём время на затухание (2 секунды)
+        std::this_thread::sleep_for(std::chrono::milliseconds(2100));
+
+        // Завершаем goal успехом
+        if (current_goal_handle_) {
+            auto result = std::make_shared<MotionPlan::Result>();
+            result->success = true;
+            current_goal_handle_->succeed(result);
+            current_goal_handle_.reset();
+        }
+        RCLCPP_INFO(this->get_logger(), "Neural action finished");
     }
 
     // TODO: Включить в функцию execute_traj
@@ -736,7 +1023,10 @@ private:
     DataBuffer<MotorState> motor_state_buffer_;
 
     TrajectoryManager trajectory_manager_;              // Буфер траекторий
-
+    
+    std::unique_ptr<NeuralActionManager> neural_manager_; //указатель на нейроменеджер
+    std::shared_ptr<unitree_hg::msg::LowState> last_low_state_;
+    
     std::mutex state_mutex_;
     EnableControl enable_control_;
     StateOfAction state_of_action_;
@@ -762,6 +1052,7 @@ private:
 int main(int argc, char ** argv) {
     rclcpp::init(argc, argv);
     auto server = std::make_shared<ManipulationActionServer>();
+    server->init();
     rclcpp::spin(server);
     rclcpp::shutdown();
     return 0;
