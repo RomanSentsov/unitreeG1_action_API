@@ -24,6 +24,9 @@ find_package(unitree_hg REQUIRED)
 
 find_package(action_msgs REQUIRED)
 
+#для запуска нейросети необходимо найти LibTorch
+find_package(Torch REQUIRED)
+
 include_directories(include include/common include/nlohmann)
 
 
@@ -33,6 +36,9 @@ add_executable(arm_exec_action_server
   src/motor_crc_hg.cpp
 )
 
+target_link_libraries(arm_exec_action_server
+  ${TORCH_LIBRARIES}
+)
 
 # Не нужно, забыл убрать. Ничего не ломает
 target_link_libraries(arm_exec_action_server
