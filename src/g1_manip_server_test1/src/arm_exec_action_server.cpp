@@ -22,6 +22,8 @@
 #include "unitree_hg/msg/low_state.hpp"
 #include "common/motor_crc_hg.h"
 
+#include "dftp_hand_control/hand_controller.hpp"
+
 #include <geometry_msgs/msg/point_stamped.hpp>
 
 #include "g1_manip_interf_test1/action/test_server_exec.hpp"
@@ -275,6 +277,15 @@ public:
             10,  // QoS (queue size)
             std::bind(&ManipulationActionServer::door_handle_callback, this, _1)
         );
+
+        try {
+            hand_controller_ = std::make_unique<dftp_hand::HandController>(this->shared_from_this());
+            RCLCPP_INFO(this->get_logger(), "dftp_hand::HandController initialized successfully.");
+        } catch (const std::exception& e) {
+            RCLCPP_ERROR(this->get_logger(), "Hand controller init failed: %s", e.what());
+        }
+
+
 
 
         RCLCPP_INFO(this->get_logger(), "Manipulation Action Server started (architecture v2)");
@@ -825,6 +836,59 @@ private:
     }
 
     // ====================================================================
+    // DFTP_hand_control – обёртки для жестов
+    // ====================================================================
+
+    bool execute_hand_gesture(dftp_hand::HandSide side, dftp_hand::Gesture gesture, int stabilization_ms = 600) {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        if (enable_control_ != EnableControl::ENABLED) {
+            RCLCPP_ERROR(this->get_logger(), "Gesture rejected: robot not ENABLED");
+            return false;
+        }
+        if (!hand_controller_) {
+            RCLCPP_ERROR(this->get_logger(), "Hand controller not initialized");
+            return false;
+        }
+
+        try {
+            std::string side_str = (side == dftp_hand::HandSide::LEFT) ? "LEFT" : "RIGHT";
+            RCLCPP_INFO(this->get_logger(), "Executing %s on %s hand...", 
+                        dftp_hand::gestureToString(gesture).c_str(), side_str.c_str());
+            
+            // Библиотека dftp_hand_control блокирует поток до получения ответа от драйвера
+            hand_controller_->executeGesture(side, gesture);
+            
+            // Дополнительная синхронизация: ждём стабилизации пальцев перед следующей командой руки
+            std::this_thread::sleep_for(std::chrono::milliseconds(stabilization_ms));
+            return true;
+        } catch (const std::exception& e) {
+            RCLCPP_ERROR(this->get_logger(), "Gesture execution failed: %s", e.what());
+            // emergency();
+            return false;
+        }
+    }
+
+    // Для управления обеими кистями одновременно
+    bool execute_parallel_gestures(
+        dftp_hand::HandSide left_side, dftp_hand::Gesture left_gesture,
+        dftp_hand::HandSide right_side, dftp_hand::Gesture right_gesture,
+        int stabilization_ms = 600) {
+        
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        if (enable_control_ != EnableControl::ENABLED || !hand_controller_) return false;
+        
+        try {
+            hand_controller_->executeGestureParallel(left_side, left_gesture, right_side, right_gesture);
+            std::this_thread::sleep_for(std::chrono::milliseconds(stabilization_ms));
+            return true;
+        } catch (const std::exception& e) {
+            RCLCPP_ERROR(this->get_logger(), "Parallel gesture failed: %s", e.what());
+            emergency();
+            return false;
+        }
+    }
+
+    // ====================================================================
     // LowState callback – обновляет буфер состояния
     // ====================================================================
     void low_state_callback(const unitree_hg::msg::LowState::SharedPtr msg) {
@@ -881,15 +945,29 @@ private:
 
         // Включаем управление руками
         enable();
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(5000));      
+        std::this_thread::sleep_for(std::chrono::milliseconds(5000));
         
-        move_to_pose(current_handle_xyz_[0] - 0.1, current_handle_xyz_[1], current_handle_xyz_[2]);
+        move_to_pose(0.33, -0.31, 0.4);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000)); 
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(5000));      
+        execute_hand_gesture(dftp_hand::HandSide::RIGHT, dftp_hand::Gesture::POINT_BUTTON, 800);
 
-        //Планируем траекторию и двигаем руку в точку
-        move_to_pose(current_handle_xyz_[0], current_handle_xyz_[1], current_handle_xyz_[2]);
+        move_to_pose(0.44, -0.24, 0.4);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+
+        execute_hand_gesture(dftp_hand::HandSide::RIGHT, dftp_hand::Gesture::FREE_WRIST, 800);
+        
+        move_to_pose(0.33, -0.31, 0.4);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));   
+
+
+        
+        // move_to_pose(current_handle_xyz_[0] - 0.1, current_handle_xyz_[1], current_handle_xyz_[2]);
+
+        // std::this_thread::sleep_for(std::chrono::milliseconds(5000));      
+
+        // Планируем траекторию и двигаем руку в точку
+        // move_to_pose(current_handle_xyz_[0], current_handle_xyz_[1], current_handle_xyz_[2]);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(5000));
 
@@ -920,6 +998,8 @@ private:
 
     std::vector<double> current_handle_xyz_;
     TrajectoryManager trajectory_manager_;              // Буфер траекторий
+
+    std::unique_ptr<dftp_hand::HandController> hand_controller_; 
 
     std::mutex state_mutex_;
     EnableControl enable_control_;

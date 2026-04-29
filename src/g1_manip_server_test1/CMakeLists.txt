@@ -14,6 +14,10 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(rclcpp_components REQUIRED)
 
+# dftp hand control
+find_package(dftp_hand_control REQUIRED)
+find_package(service_interfaces REQUIRED)
+
 # Структура приходящих запросов основана на этих пакетах:
 find_package(moveit_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
@@ -37,6 +41,7 @@ add_executable(arm_exec_action_server
 # Не нужно, забыл убрать. Ничего не ломает
 target_link_libraries(arm_exec_action_server
   ${unitree_hg_LIBRARIES}
+  dftp_hand_control::hand_controller_lib
 )
 
 ament_target_dependencies(arm_exec_action_server
@@ -46,6 +51,8 @@ ament_target_dependencies(arm_exec_action_server
   moveit_msgs
   trajectory_msgs
   unitree_hg
+  dftp_hand_control
+  service_interfaces
 )
 
 install(TARGETS

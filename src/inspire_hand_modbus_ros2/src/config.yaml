@@ -1,0 +1,5 @@
+modbus:
+  ip: "192.168.123.211"  # 灵巧手的 IP 地址
+  port: 6000            # 灵巧手的端口号
+  
+#bespolezn`iy fail kakoi-to

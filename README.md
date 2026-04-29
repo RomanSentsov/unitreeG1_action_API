@@ -305,8 +305,7 @@ void execute_button_press_with_gesture() {
 
 ## 📄 Ссылки и демонстрации
 
-- `dftp_hand_control`: [[ссылка на гугл диск](https://drive.google.com/drive/folders/1yF2wz_ClhV5SBzENKPAhYA1ctDXb72rt?usp=drive_link)]
-- `inspire_hand_modbus_ros2`: [[ссылка на гугл диск](https://drive.google.com/drive/folders/1yF2wz_ClhV5SBzENKPAhYA1ctDXb72rt?usp=drive_link)]
-- `unitree_hg`: [TODO?]
+- `dftp_hand_control, inspire_hand_modbus_ros2, работа кистей`: [[ссылка на гугл диск](https://drive.google.com/drive/folders/1yF2wz_ClhV5SBzENKPAhYA1ctDXb72rt?usp=drive_link)]
+- `TODO`: [TODO?]
 
 > ⚠️ **Важно**: Данный модуль требует физического подключения кистей Inspire Hand (DFTP) и корректной настройки Modbus TCP сети. Тестирование без кистей возможно только с запуском ноды драйвера.
