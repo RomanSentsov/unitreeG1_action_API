@@ -269,6 +269,27 @@ public:
         commander_timer_ = this->create_wall_timer(
             std::chrono::milliseconds(2),
             std::bind(&ManipulationActionServer::commander_callback, this));
+
+        
+        // ====== ИНИЦИАЛИЗАЦИЯ КИСТЕЙ (Вариант 2: прокси-узел БЕЗ явного spin) ======
+        try {
+            // Создаём отдельный узел-прокси ТОЛЬКО для кистей
+            // Важно: этот узел НЕ добавляется в главный executor и НЕ спинится явно
+            auto hand_node = rclcpp::Node::make_shared("hand_control_proxy");
+        
+            // HandController будет использовать этот узел для сервис-клиентов
+            // При вызове executeGesture() библиотека сама создаст временный executor
+            // через spin_until_future_complete, поэтому конфликт не возникнет
+            hand_controller_ = std::make_unique<dftp_hand::HandController>(hand_node);
+        
+            // Сохраняем узел как член класса, чтобы он не уничтожился
+            hand_proxy_node_ = hand_node;
+        
+            RCLCPP_INFO(this->get_logger(), "Hand controller initialized successfully.");
+        } catch (const std::exception& e) {
+            RCLCPP_ERROR(this->get_logger(), "Hand controller init failed: %s", e.what());
+        }
+        // ============================================================================
         
 
         // CV test
@@ -277,16 +298,6 @@ public:
             10,  // QoS (queue size)
             std::bind(&ManipulationActionServer::door_handle_callback, this, _1)
         );
-
-        try {
-            hand_controller_ = std::make_unique<dftp_hand::HandController>(this->shared_from_this());
-            RCLCPP_INFO(this->get_logger(), "dftp_hand::HandController initialized successfully.");
-        } catch (const std::exception& e) {
-            RCLCPP_ERROR(this->get_logger(), "Hand controller init failed: %s", e.what());
-        }
-
-
-
 
         RCLCPP_INFO(this->get_logger(), "Manipulation Action Server started (architecture v2)");
         RCLCPP_INFO(this->get_logger(), "Initial state: DISABLED / HOLDING_POSE");
@@ -852,8 +863,7 @@ private:
 
         try {
             std::string side_str = (side == dftp_hand::HandSide::LEFT) ? "LEFT" : "RIGHT";
-            RCLCPP_INFO(this->get_logger(), "Executing %s on %s hand...", 
-                        dftp_hand::gestureToString(gesture).c_str(), side_str.c_str());
+            RCLCPP_INFO(this->get_logger(), "Executing command on %s hand...", side_str.c_str());
             
             // Библиотека dftp_hand_control блокирует поток до получения ответа от драйвера
             hand_controller_->executeGesture(side, gesture);
@@ -960,8 +970,6 @@ private:
         move_to_pose(0.33, -0.31, 0.4);
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));   
 
-
-        
         // move_to_pose(current_handle_xyz_[0] - 0.1, current_handle_xyz_[1], current_handle_xyz_[2]);
 
         // std::this_thread::sleep_for(std::chrono::milliseconds(5000));      
@@ -974,8 +982,6 @@ private:
         soft_disable();
 
         //std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-
-
     }
 
 
@@ -1000,6 +1006,8 @@ private:
     TrajectoryManager trajectory_manager_;              // Буфер траекторий
 
     std::unique_ptr<dftp_hand::HandController> hand_controller_; 
+    // Прокси-узел для кистей (чтобы не уничтожился после конструктора)
+    rclcpp::Node::SharedPtr hand_proxy_node_;
 
     std::mutex state_mutex_;
     EnableControl enable_control_;
