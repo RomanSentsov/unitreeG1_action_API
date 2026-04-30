@@ -49,7 +49,7 @@ GestureData HandController::getGestureData(Gesture gesture) {
             break;
         case Gesture::FUCK_YOU:
             positions = {2000, 2000, 0, 2000, 0, 0}; 
-            forces = {400, 400, 400, 400, 400, 400};
+            forces = {600, 600, 600, 600, 600, 600};
             break;
         case Gesture::FREE_WRIST:
         default:
