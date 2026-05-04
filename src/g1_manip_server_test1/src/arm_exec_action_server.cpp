@@ -28,6 +28,9 @@
 
 #include "g1_manip_interf_test1/action/test_server_exec.hpp"
 
+#include <torch/script.h>
+#include <moveit_msgs/srv/get_state_validity.hpp>
+
 using namespace std::placeholders;
 
 // ====================================================================
@@ -105,6 +108,35 @@ const std::array<double, 7> HOME_LEFT = {
 enum class Mode : uint8_t { PR = 0, AB = 1 };
 
 // ====================================================================
+// Класс для загрузки и инференса нейросети
+// ====================================================================
+class NeuralPolicy {
+public:
+    NeuralPolicy(const std::string& model_path) {
+        try {
+            module_ = torch::jit::load(model_path);
+            module_.eval();
+            std::cout << "NeuralPolicy: model loaded from " << model_path << std::endl;
+        } catch (const c10::Error& e) {
+            std::cerr << "NeuralPolicy: load failed - " << e.what() << std::endl;
+            throw;
+        }
+    }
+
+    std::vector<float> act(const std::vector<float>& observation) {
+        torch::Tensor input = torch::tensor(observation).view({1, (int64_t)observation.size()});
+        torch::NoGradGuard no_grad;
+        torch::Tensor output = module_.forward({input}).toTensor();
+        output = output.squeeze().to(torch::kCPU);
+        std::vector<float> result(output.data_ptr<float>(), output.data_ptr<float>() + output.numel());
+        return result;
+    }
+
+private:
+    torch::jit::script::Module module_;
+};
+
+// ====================================================================
 // Буфер данных
 // ====================================================================
 template <typename T>
@@ -138,6 +170,135 @@ struct MotorCommand {
 struct MotorState {
     std::array<float, G1_NUM_MOTOR> q{};
     std::array<float, G1_NUM_MOTOR> dq{};
+};
+
+// ====================================================================
+// Менеджер нейросетевых действий
+// Отвечает за:
+// - загрузку модели (start)
+// - обновление нейросети с частотой 50 Гц (раз в 20 мс)
+// - сборку вектора наблюдений из low_state (включая предыдущие действия)
+// - хранение последней вычисленной команды (current_action_)
+// - выдачу команды по запросу (getCurrentCommand)
+// ====================================================================
+class NeuralActionManager {
+public:
+    NeuralActionManager(rclcpp::Node* node) : node_(node), active_(false),
+        prev_action_(29, 0.0f), current_action_(29, 0.0f) {}
+
+    bool start(const std::string& action_name, const std::string& model_path, double timeout_sec = 30.0) {
+        if (active_) {
+            RCLCPP_WARN(node_->get_logger(), "NeuralActionManager already active, stopping previous");
+            stop();
+        }
+        try {
+            policy_ = std::make_unique<NeuralPolicy>(model_path);
+            RCLCPP_INFO(node_->get_logger(), "NeuralActionManager: started for action '%s' with timeout %.1f sec",
+                        action_name.c_str(), timeout_sec);
+        } catch (const std::exception& e) {
+            RCLCPP_ERROR(node_->get_logger(), "Failed to load model: %s", e.what());
+            return false;
+        }
+        active_ = true;
+        start_time_ = std::chrono::steady_clock::now();
+        last_update_time_ = start_time_ - std::chrono::milliseconds(20); // чтобы первое обновление произошло сразу
+        timeout_sec_ = timeout_sec;
+        
+        std::fill(current_action_.begin(), current_action_.end(), 0.0f);
+        std::fill(prev_action_.begin(), prev_action_.end(), 0.0f);
+        return true;
+    }
+
+    void stop() {
+        active_ = false;
+        policy_.reset();
+        RCLCPP_INFO(node_->get_logger(), "NeuralActionManager stopped");
+    }
+
+    bool isActive() const { return active_; }
+
+    // Проверка таймаута (используется в execute_neural_action для цикла ожидания)
+    bool isTimeoutExpired() const {
+        if (!active_) return true;
+        double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - start_time_).count();
+        return elapsed > timeout_sec_;
+    }
+
+    // Главный метод, вызываемый из command_generator_callback (500 Гц).
+    // Он решает, когда обновить нейросеть (не чаще 20 мс) и возвращает команду.
+    bool getCurrentCommand(std::vector<float>& cmd_out, const unitree_hg::msg::LowState::SharedPtr low_state) {
+        if (!active_) return false;
+
+        auto now = std::chrono::steady_clock::now();
+        double dt = std::chrono::duration<double>(now - last_update_time_).count();
+        if (dt >= 0.02) {
+            std::vector<float> obs = buildObservation(low_state);
+            updateNeural(obs);
+            last_update_time_ = now;
+        }
+
+        cmd_out = current_action_;
+        return true;
+    }
+
+private:
+    // Сборка вектора наблюдений размером 633 из low_state
+    std::vector<float> buildObservation(const unitree_hg::msg::LowState::SharedPtr low_state) {
+        std::vector<float> obs(633, 0.0f);
+        if (!low_state) return obs;
+
+        const auto& imu = low_state->imu_state;
+
+        obs[3] = imu.gyroscope[0];
+        obs[4] = imu.gyroscope[1];
+        obs[5] = imu.gyroscope[2];
+
+        float ax = imu.accelerometer[0];
+        float ay = imu.accelerometer[1];
+        float az = imu.accelerometer[2];
+        float norm = std::sqrt(ax*ax + ay*ay + az*az);
+        if (norm > 0.001f) {
+            obs[6] = ax / norm;
+            obs[7] = ay / norm;
+            obs[8] = az / norm;
+        }
+
+        for (int i = 0; i < 27; ++i) {
+            obs[9 + i] = low_state->motor_state[i].q;
+        }
+
+        for (int i = 0; i < 27; ++i) {
+            obs[36 + i] = low_state->motor_state[i].dq;
+        }
+
+        for (int i = 0; i < 29; ++i) {
+            obs[63 + i] = prev_action_[i];
+        }
+
+        // Остальные 541 число (target_ref, rel_pose_target) пока нули.
+        return obs;
+    }
+
+    void updateNeural(const std::vector<float>& obs) {
+        if (!policy_) return;
+        std::vector<float> action = policy_->act(obs);
+        if (action.size() >= 29) {
+            current_action_ = action;
+            // Сохраняем текущее действие как предыдущее для следующего вызова
+            prev_action_ = current_action_;
+        } else {
+            RCLCPP_WARN(node_->get_logger(), "Policy returned wrong size: %zu, expected 29", action.size());
+        }
+    }
+
+    rclcpp::Node* node_;
+    std::unique_ptr<NeuralPolicy> policy_;
+    bool active_;
+    std::chrono::steady_clock::time_point start_time_;
+    std::chrono::steady_clock::time_point last_update_time_;
+    double timeout_sec_;
+    std::vector<float> prev_action_;      // предыдущее действие (29)
+    std::vector<float> current_action_;   // последнее действие от нейросети (29)
 };
 
 // ====================================================================
@@ -298,8 +459,8 @@ public:
             10,  // QoS (queue size)
             std::bind(&ManipulationActionServer::door_handle_callback, this, _1)
         );
-
-        RCLCPP_INFO(this->get_logger(), "Manipulation Action Server started (architecture v2)");
+        neural_manager_ = std::make_unique<NeuralActionManager>(this);
+        RCLCPP_INFO(this->get_logger(), "Manipulation Action Server started");
         RCLCPP_INFO(this->get_logger(), "Initial state: DISABLED / HOLDING_POSE");
     }
 
@@ -352,6 +513,7 @@ private:
         std::lock_guard<std::mutex> lock(state_mutex_);
         enable_control_ = EnableControl::EMERGENCY;
         trajectory_manager_.stop();
+        if (neural_manager_) neural_manager_->stop();
         state_of_action_ = StateOfAction::HOLDING_POSE;
         RCLCPP_WARN(this->get_logger(), "EMERGENCY mode activated");
     }
@@ -757,13 +919,28 @@ private:
                         break;
 
                     case StateOfAction::NEURO_DRIVEN:
-                        // Заглушка нейросети
-                        // TODO: обсчёт нейронкой, проверка валидности, при невалидности -> emergency()
-                        // Пока просто удерживаем позу
-                        for (int idx : ALL_ARM_MOTORS) {
-                            cmd.q_target[idx] = current_state->q[idx];
+                    {
+                        if (!neural_manager_ || !neural_manager_->isActive() || !last_low_state_) {
+                            std::lock_guard<std::mutex> lock(state_mutex_);
+                            state_of_action_ = StateOfAction::HOLDING_POSE;
+                            break;
+                        }
+
+                        std::vector<float> neural_cmd;
+                        if (neural_manager_->getCurrentCommand(neural_cmd, last_low_state_)) {
+                            for (int i = 0; i < G1_NUM_MOTOR; ++i) {
+                                if (i < (int)neural_cmd.size())
+                                    cmd.q_target[i] = neural_cmd[i];
+                                else
+                                    cmd.q_target[i] = current_state->q[i];
+                            }
+                        } else {
+                            std::lock_guard<std::mutex> lock(state_mutex_);
+                            state_of_action_ = StateOfAction::HOLDING_POSE;
+                            RCLCPP_INFO(get_logger(), "Neural action finished, switching to HOLDING_POSE");
                         }
                         break;
+                    }
                 }
                 break;
         }
@@ -902,6 +1079,7 @@ private:
     // LowState callback – обновляет буфер состояния
     // ====================================================================
     void low_state_callback(const unitree_hg::msg::LowState::SharedPtr msg) {
+        last_low_state_ = msg;
         MotorState ms;
         for (int i = 0; i < G1_NUM_MOTOR; ++i) {
             ms.q[i] = msg->motor_state[i].q;
@@ -946,6 +1124,13 @@ private:
             case 0:  // Button press sequence
                 std::thread([this]() { execute_button_press(); }).detach();
                 break;
+            case 2:
+            {
+                // Пока путь жёсткий, потом вынесем в конфиг
+                std::string model_path = "/home/egorlekomtsev/Downloads/2026-03-31_15-52-55-Button-Press-a(1)/2026-03-31_15-52-55-Button-Press-a/exported/policy.pt";
+                std::thread([this, model_path]() { execute_neural_action(model_path); }).detach();
+                break;
+            }
         }
     }
 
@@ -984,6 +1169,43 @@ private:
         //std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     }
 
+    void execute_neural_action(const std::string& model_path, double timeout = 30.0) {
+        RCLCPP_INFO(get_logger(), "Starting neural action with model: %s", model_path.c_str());
+
+        enable();
+
+        if (!neural_manager_->start("button_press", model_path, timeout)) {
+            RCLCPP_ERROR(get_logger(), "Failed to start neural manager");
+            if (current_goal_handle_) {
+                auto result = std::make_shared<MotionPlan::Result>();
+                result->success = false;
+                current_goal_handle_->abort(result);
+                current_goal_handle_.reset();
+            }
+            return;
+        }
+
+        // Переключаем состояние сервера в NEURO_DRIVEN
+        {
+            std::lock_guard<std::mutex> lock(state_mutex_);
+            state_of_action_ = StateOfAction::NEURO_DRIVEN;
+        }
+
+        // Ждём, пока нейрорежим активен и не истёк таймаут
+        while (rclcpp::ok() && neural_manager_->isActive() && !neural_manager_->isTimeoutExpired()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        soft_disable();
+
+        if (current_goal_handle_) {
+            auto result = std::make_shared<MotionPlan::Result>();
+            result->success = true;
+            current_goal_handle_->succeed(result);
+            current_goal_handle_.reset();
+        }
+        RCLCPP_INFO(get_logger(), "Neural action finished");
+    }
 
     // ====================================================================
     // Члены класса
@@ -1005,6 +1227,10 @@ private:
     std::vector<double> current_handle_xyz_;
     TrajectoryManager trajectory_manager_;              // Буфер траекторий
 
+    // Управление нейросетевыми действиями
+    std::unique_ptr<NeuralActionManager> neural_manager_;
+    std::shared_ptr<unitree_hg::msg::LowState> last_low_state_;
+    
     std::unique_ptr<dftp_hand::HandController> hand_controller_; 
     // Прокси-узел для кистей (чтобы не уничтожился после конструктора)
     rclcpp::Node::SharedPtr hand_proxy_node_;

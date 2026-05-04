@@ -27,6 +27,7 @@ find_package(trajectory_msgs REQUIRED)
 find_package(unitree_hg REQUIRED)
 
 find_package(action_msgs REQUIRED)
+find_package(Torch REQUIRED)
 
 include_directories(include include/common include/nlohmann)
 
@@ -42,6 +43,7 @@ add_executable(arm_exec_action_server
 target_link_libraries(arm_exec_action_server
   ${unitree_hg_LIBRARIES}
   dftp_hand_control::hand_controller_lib
+  ${TORCH_LIBRARIES}
 )
 
 ament_target_dependencies(arm_exec_action_server
