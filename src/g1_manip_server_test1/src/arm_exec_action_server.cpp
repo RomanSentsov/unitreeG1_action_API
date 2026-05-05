@@ -413,6 +413,7 @@ public:
 
         // MoveIt client
         planning_client_ = this->create_client<MotionPlanService>("/plan_kinematic_path");
+        validity_client_ = this->create_client<moveit_msgs::srv::GetStateValidity>("/check_state_validity");
 
         // LowState subscriber
         lowstate_subscriber_ = this->create_subscription<unitree_hg::msg::LowState>(
@@ -462,6 +463,9 @@ public:
         neural_manager_ = std::make_unique<NeuralActionManager>(this);
         RCLCPP_INFO(this->get_logger(), "Manipulation Action Server started");
         RCLCPP_INFO(this->get_logger(), "Initial state: DISABLED / HOLDING_POSE");
+
+        is_waiting_for_collision_result_ = false;
+        last_safe_neural_cmd_.assign(29, 0.0f);
     }
 
 private:
@@ -516,6 +520,8 @@ private:
         if (neural_manager_) neural_manager_->stop();
         state_of_action_ = StateOfAction::HOLDING_POSE;
         RCLCPP_WARN(this->get_logger(), "EMERGENCY mode activated");
+        is_waiting_for_collision_result_ = false;
+        collision_future_ = std::shared_future<bool>();
     }
 
     void execute_traj(const moveit_msgs::msg::RobotTrajectory& traj) {
@@ -794,6 +800,33 @@ private:
 
     }
 
+    bool isValid(const std::vector<std::string>& joint_names,
+                const std::vector<double>& positions,
+                double timeout_sec = 0.5) {
+        // Проверяем, что списки одинаковой длины
+        if (joint_names.size() != positions.size()) {
+            RCLCPP_ERROR(get_logger(), "isValid: joint names and positions size mismatch");
+            return false;
+        }
+        // Ждём, пока сервис станет доступен 
+        if (!validity_client_->wait_for_service(std::chrono::seconds(1))) {
+            RCLCPP_ERROR(get_logger(), "Validity service not available");
+            return false;  
+        }
+        auto request = std::make_shared<moveit_msgs::srv::GetStateValidity::Request>();
+        request->robot_state.joint_state.name = joint_names;
+        request->robot_state.joint_state.position = positions;
+        request->robot_state.joint_state.velocity.resize(joint_names.size(), 0.0);
+        request->robot_state.joint_state.effort.resize(joint_names.size(), 0.0);
+        auto future = validity_client_->async_send_request(request);
+        if (future.wait_for(std::chrono::duration<double>(timeout_sec)) == std::future_status::ready) {
+            return future.get()->valid;
+        } else {
+            RCLCPP_ERROR(get_logger(), "Validity service timeout after %.2f sec", timeout_sec);
+            return false;
+        }
+    }
+
     void soft_disable(){
         std::vector<double> home_right_vec(HOME_RIGHT.begin(), HOME_RIGHT.end());
         move_to_pose_angles(home_right_vec);
@@ -920,6 +953,7 @@ private:
 
                     case StateOfAction::NEURO_DRIVEN:
                     {
+                        // Проверка, что менеджер активен и есть свежий low_state
                         if (!neural_manager_ || !neural_manager_->isActive() || !last_low_state_) {
                             std::lock_guard<std::mutex> lock(state_mutex_);
                             state_of_action_ = StateOfAction::HOLDING_POSE;
@@ -928,13 +962,69 @@ private:
 
                         std::vector<float> neural_cmd;
                         if (neural_manager_->getCurrentCommand(neural_cmd, last_low_state_)) {
+                            // ----- Асинхронная проверка коллизий для рук (14 суставов) -----
+                            // Имена суставов рук в порядке, соответствующем индексам G1JointIndex
+                            static const std::vector<std::string> arm_joint_names = {
+                                "left_shoulder_pitch_joint", "left_shoulder_roll_joint", "left_shoulder_yaw_joint",
+                                "left_elbow_joint", "left_wrist_roll_joint", "left_wrist_pitch_joint", "left_wrist_yaw_joint",
+                                "right_shoulder_pitch_joint", "right_shoulder_roll_joint", "right_shoulder_yaw_joint",
+                                "right_elbow_joint", "right_wrist_roll_joint", "right_wrist_pitch_joint", "right_wrist_yaw_joint"
+                            };
+                            const int left_start = LEFT_SHOULDER_PITCH;   
+                            const int right_start = RIGHT_SHOULDER_PITCH; 
+
+                            // Если нет ожидающего запроса, отправляем новый асинхронный запрос
+                            if (!is_waiting_for_collision_result_) {
+                                // Извлекаем позиции только для рук из neural_cmd
+                                std::vector<double> arm_positions(arm_joint_names.size());
+                                for (size_t i = 0; i < 7; ++i) {
+                                    arm_positions[i] = neural_cmd[left_start + i];
+                                    arm_positions[i + 7] = neural_cmd[right_start + i];
+                                }
+                                // Создаём запрос
+                                auto request = std::make_shared<moveit_msgs::srv::GetStateValidity::Request>();
+                                request->robot_state.joint_state.name = arm_joint_names;
+                                request->robot_state.joint_state.position = arm_positions;
+                                request->robot_state.joint_state.velocity.resize(arm_joint_names.size(), 0.0);
+                                request->robot_state.joint_state.effort.resize(arm_joint_names.size(), 0.0);
+                                // Асинхронная отправка
+                                auto future_raw = validity_client_->async_send_request(request);
+                                collision_future_ = future_raw.share();
+                                is_waiting_for_collision_result_ = true;
+                            }
+
+                            // Проверяем, не готов ли результат предыдущего запроса
+                            bool use_new_cmd = false;
+                            if (is_waiting_for_collision_result_) {
+                                auto status = collision_future_.wait_for(std::chrono::milliseconds(1));
+                                if (status == std::future_status::ready) {
+                                    bool coll_free = collision_future_.get();
+                                    is_waiting_for_collision_result_ = false;
+                                    if (coll_free) {
+                                        last_safe_neural_cmd_ = neural_cmd;
+                                        use_new_cmd = true;
+                                    } else {
+                                        RCLCPP_WARN(get_logger(), "Collision detected! Using last safe command.");
+                                    }
+                                } else {
+                                    // Ответ ещё не пришёл – используем последнюю безопасную команду
+                                    use_new_cmd = false;
+                                }
+                            } else {
+                                // Нет ожидающих запросов – все команды уже проверены и безопасны
+                                use_new_cmd = true;
+                            }
+
+                            // Выбираем, какую команду отправить на моторы
+                            const std::vector<float>& cmd_to_use = use_new_cmd ? neural_cmd : last_safe_neural_cmd_;
                             for (int i = 0; i < G1_NUM_MOTOR; ++i) {
-                                if (i < (int)neural_cmd.size())
-                                    cmd.q_target[i] = neural_cmd[i];
+                                if (i < (int)cmd_to_use.size())
+                                    cmd.q_target[i] = cmd_to_use[i];
                                 else
                                     cmd.q_target[i] = current_state->q[i];
                             }
                         } else {
+                            // Если getCurrentCommand вернул false – нейрорежим завершён
                             std::lock_guard<std::mutex> lock(state_mutex_);
                             state_of_action_ = StateOfAction::HOLDING_POSE;
                             RCLCPP_INFO(get_logger(), "Neural action finished, switching to HOLDING_POSE");
@@ -1112,6 +1202,8 @@ private:
         {
             std::lock_guard<std::mutex> lock(state_mutex_);
             state_of_action_ = StateOfAction::HOLDING_POSE;
+            is_waiting_for_collision_result_ = false;
+            collision_future_ = std::shared_future<bool>();
         }
         return rclcpp_action::CancelResponse::ACCEPT;
     }
@@ -1213,6 +1305,7 @@ private:
     rclcpp_action::Server<MotionPlan>::SharedPtr action_server_;
     std::shared_ptr<GoalHandleMotionPlan> current_goal_handle_;
     rclcpp::Client<MotionPlanService>::SharedPtr planning_client_;
+    rclcpp::Client<moveit_msgs::srv::GetStateValidity>::SharedPtr validity_client_;
 
     rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr subscription_cv_;
 
@@ -1231,6 +1324,11 @@ private:
     std::unique_ptr<NeuralActionManager> neural_manager_;
     std::shared_ptr<unitree_hg::msg::LowState> last_low_state_;
     
+    // Для асинхронной проверки коллизий
+    std::shared_future<bool> collision_future_;
+    std::vector<float> last_safe_neural_cmd_;
+    bool is_waiting_for_collision_result_;
+
     std::unique_ptr<dftp_hand::HandController> hand_controller_; 
     // Прокси-узел для кистей (чтобы не уничтожился после конструктора)
     rclcpp::Node::SharedPtr hand_proxy_node_;
