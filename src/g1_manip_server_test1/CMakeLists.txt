@@ -42,9 +42,6 @@ target_link_libraries(arm_exec_action_server
   dftp_hand_control::hand_controller_lib
   ${TORCH_PATH}/lib/libtorch.so
   ${TORCH_PATH}/lib/libc10.so
-  # Добавляем дополнительные библиотеки, если они есть (не повредит)
-  ${TORCH_PATH}/lib/libtorch_cpu.so
-  ${TORCH_PATH}/lib/libc10_cuda.so
 )
 
 ament_target_dependencies(arm_exec_action_server
