@@ -1216,8 +1216,7 @@ private:
             RCLCPP_WARN(get_logger(), "Another goal already in progress, rejecting new one");
             auto result = std::make_shared<MotionPlan::Result>();
             result->success = false;
-            current_goal_handle_->abort(result);
-            current_goal_handle_.reset();
+            goal_handle->abort(result); 
             return;
         }
         is_busy_ = true;
