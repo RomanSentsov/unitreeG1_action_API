@@ -1206,8 +1206,8 @@ private:
             is_waiting_for_collision_result_ = false;
             collision_future_ = std::shared_future<bool>();
         }
-        return rclcpp_action::CancelResponse::ACCEPT;
         is_busy_ = false;
+        return rclcpp_action::CancelResponse::ACCEPT;
     }
 
     void handle_accepted(const std::shared_ptr<GoalHandleMotionPlan> goal_handle) {
