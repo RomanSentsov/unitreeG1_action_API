@@ -29,6 +29,7 @@ find_package(unitree_hg REQUIRED)
 find_package(action_msgs REQUIRED)
 set(Torch_DIR /home/unitree/libtorch_arm64/share/cmake/Torch)
 find_package(Torch REQUIRED)
+include_directories(/home/unitree/libtorch_arm64/include)
 
 include_directories(include include/common include/nlohmann)
 
