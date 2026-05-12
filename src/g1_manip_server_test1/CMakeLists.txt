@@ -40,11 +40,11 @@ add_executable(arm_exec_action_server
 )
 
 
-# Не нужно, забыл убрать. Ничего не ломает
 target_link_libraries(arm_exec_action_server
   ${unitree_hg_LIBRARIES}
   dftp_hand_control::hand_controller_lib
-  ${TORCH_LIBRARIES}
+  /home/unitree/libtorch_arm64/lib/libtorch.so
+  /home/unitree/libtorch_arm64/lib/libc10.so
 )
 
 ament_target_dependencies(arm_exec_action_server
