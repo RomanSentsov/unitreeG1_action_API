@@ -203,7 +203,7 @@ public:
         start_time_ = std::chrono::steady_clock::now();
         last_update_time_ = start_time_ - std::chrono::milliseconds(20); // чтобы первое обновление произошло сразу
         timeout_sec_ = timeout_sec;
-        
+
         std::fill(current_action_.begin(), current_action_.end(), 0.0f);
         std::fill(prev_action_.begin(), prev_action_.end(), 0.0f);
         return true;
@@ -307,7 +307,7 @@ private:
 class TrajectoryManager {
 public:
     enum class State { IDLE, EXECUTING };
-    
+
     void startTrajectory(const moveit_msgs::msg::RobotTrajectory& trajectory,
                         const std::unordered_map<std::string, int>& joint_map) {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -321,7 +321,7 @@ public:
         state_ = State::EXECUTING;
         start_time_ = std::chrono::steady_clock::now();
     }
-    
+
     bool getCurrentCommand(MotorCommand& cmd, const MotorState& current_state,
                           const std::unordered_map<std::string, int>& joint_map) {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -361,7 +361,7 @@ public:
         }
         return true;
     }
-    
+
     bool isExecuting() const {
         std::lock_guard<std::mutex> lock(mutex_);
         return state_ == State::EXECUTING;
@@ -432,27 +432,27 @@ public:
             std::chrono::milliseconds(2),
             std::bind(&ManipulationActionServer::commander_callback, this));
 
-        
+
         // ====== ИНИЦИАЛИЗАЦИЯ КИСТЕЙ (Вариант 2: прокси-узел БЕЗ явного spin) ======
         try {
             // Создаём отдельный узел-прокси ТОЛЬКО для кистей
             // Важно: этот узел НЕ добавляется в главный executor и НЕ спинится явно
             auto hand_node = rclcpp::Node::make_shared("hand_control_proxy");
-        
+
             // HandController будет использовать этот узел для сервис-клиентов
             // При вызове executeGesture() библиотека сама создаст временный executor
             // через spin_until_future_complete, поэтому конфликт не возникнет
             hand_controller_ = std::make_unique<dftp_hand::HandController>(hand_node);
-        
+
             // Сохраняем узел как член класса, чтобы он не уничтожился
             hand_proxy_node_ = hand_node;
-        
+
             RCLCPP_INFO(this->get_logger(), "Hand controller initialized successfully.");
         } catch (const std::exception& e) {
             RCLCPP_ERROR(this->get_logger(), "Hand controller init failed: %s", e.what());
         }
         // ============================================================================
-        
+
 
         // CV test
         subscription_cv_ = this->create_subscription<geometry_msgs::msg::PointStamped>(
@@ -477,9 +477,9 @@ private:
         current_handle_xyz_.push_back(msg->point.x);
         current_handle_xyz_.push_back(msg->point.y);
         current_handle_xyz_.push_back(msg->point.z);
-        
+
         // Выводим информацию
-        RCLCPP_INFO(this->get_logger(), 
+        RCLCPP_INFO(this->get_logger(),
                    "Updated handle position - x: %.3f, y: %.3f, z: %.3f",
                    current_handle_xyz_[0], current_handle_xyz_[1], current_handle_xyz_[2]);
     }
@@ -521,7 +521,8 @@ private:
         state_of_action_ = StateOfAction::HOLDING_POSE;
         RCLCPP_WARN(this->get_logger(), "EMERGENCY mode activated");
         is_waiting_for_collision_result_ = false;
-        collision_future_ = std::shared_future<std::shared_ptr<moveit_msgs::srv::GetStateValidity::Response>>();        is_busy_ = false;
+        collision_future_ = std::shared_future<std::shared_ptr<moveit_msgs::srv::GetStateValidity::Response>>();
+        is_busy_ = false;
     }
 
     void execute_traj(const moveit_msgs::msg::RobotTrajectory& traj) {
@@ -610,6 +611,7 @@ private:
             } else {
                 RCLCPP_ERROR(this->get_logger(), "Planning failed, error code: %d",
                              response->motion_plan_response.error_code.val);
+            }
         } else {
             RCLCPP_ERROR(this->get_logger(), "Planning service timeout");
         }
@@ -620,19 +622,19 @@ private:
         const std::vector<double>& target_joint_angles) {
         // Validate input
         if (target_joint_angles.size() != 7) {
-            RCLCPP_ERROR(this->get_logger(), 
+            RCLCPP_ERROR(this->get_logger(),
                         "Invalid number of joint angles. Expected 7, got %zu",
                         target_joint_angles.size());
             return moveit_msgs::msg::RobotTrajectory();
         }
-        
+
         moveit_msgs::msg::RobotTrajectory result;
         auto current_state = motor_state_buffer_.GetData();
         if (!current_state) {
             RCLCPP_ERROR(this->get_logger(), "Cannot plan: no robot state");
             return result;
         }
-        
+
         // Get current joint positions
         std::vector<double> start_positions = {
             current_state->q[RIGHT_SHOULDER_PITCH],
@@ -643,13 +645,13 @@ private:
             current_state->q[RIGHT_WRIST_PITCH],
             current_state->q[RIGHT_WRIST_YAW]
         };
-        
+
         // Joint names in the same order
         std::vector<std::string> joint_names = {
             "right_shoulder_pitch_joint", "right_shoulder_roll_joint", "right_shoulder_yaw_joint",
             "right_elbow_joint", "right_wrist_roll_joint", "right_wrist_pitch_joint", "right_wrist_yaw_joint"
         };
-        
+
         auto request = std::make_shared<MotionPlanService::Request>();
         request->motion_plan_request.group_name = "arm_r";
         request->motion_plan_request.start_state.is_diff = true;
@@ -657,11 +659,11 @@ private:
         request->motion_plan_request.start_state.joint_state.position = start_positions;
         request->motion_plan_request.start_state.joint_state.velocity = std::vector<double>(7, 0.0);
         request->motion_plan_request.start_state.joint_state.effort = std::vector<double>(7, 0.0);
-        
+
         // Create goal constraints for joint angles
         moveit_msgs::msg::Constraints goal_constraint;
         moveit_msgs::msg::JointConstraint joint_constraint;
-        
+
         for (size_t i = 0; i < joint_names.size(); ++i) {
             joint_constraint.joint_name = joint_names[i];
             joint_constraint.position = target_joint_angles[i];
@@ -670,15 +672,15 @@ private:
             joint_constraint.weight = 1.0;
             goal_constraint.joint_constraints.push_back(joint_constraint);
         }
-        
+
         request->motion_plan_request.goal_constraints.push_back(goal_constraint);
         request->motion_plan_request.allowed_planning_time = 5.0;
         request->motion_plan_request.max_velocity_scaling_factor = 0.5;
         request->motion_plan_request.max_acceleration_scaling_factor = 0.5;
-        
+
         auto future = planning_client_->async_send_request(request);
         auto status = future.wait_for(std::chrono::seconds(10));
-        
+
         if (status == std::future_status::ready) {
             auto response = future.get();
             if (response->motion_plan_response.error_code.val == moveit_msgs::msg::MoveItErrorCodes::SUCCESS) {
@@ -691,44 +693,44 @@ private:
         } else {
             RCLCPP_ERROR(this->get_logger(), "Joint angle planning service timeout");
         }
-        
+
         return result;
     }
 
     moveit_msgs::msg::RobotTrajectory interpolate_trajectory(
         const moveit_msgs::msg::RobotTrajectory& trajectory, int factor = 8) {
-        
+
         if (trajectory.joint_trajectory.points.empty() || factor <= 1) {
             return trajectory;
         }
-        
+
         moveit_msgs::msg::RobotTrajectory interpolated = trajectory;
         interpolated.joint_trajectory.points.clear();
-        
+
         const auto& points = trajectory.joint_trajectory.points;
         size_t num_joints = points[0].positions.size();
-        
+
         for (size_t i = 0; i < points.size() - 1; ++i) {
             const auto& p1 = points[i];
             const auto& p2 = points[i + 1];
-            
+
             double t1 = p1.time_from_start.sec + p1.time_from_start.nanosec * 1e-9;
             double t2 = p2.time_from_start.sec + p2.time_from_start.nanosec * 1e-9;
             double dt = (t2 - t1) / factor;
-            
+
             for (int step = 0; step < factor; ++step) {
                 double ratio = static_cast<double>(step) / factor;
                 double current_time = t1 + step * dt;
-                
+
                 trajectory_msgs::msg::JointTrajectoryPoint new_point;
                 new_point.time_from_start = rclcpp::Duration::from_seconds(current_time);
                 new_point.positions.resize(num_joints);
-                
+
                 // Линейная интерполяция позиций
                 for (size_t j = 0; j < num_joints; ++j) {
                     new_point.positions[j] = p1.positions[j] + ratio * (p2.positions[j] - p1.positions[j]);
                 }
-                
+
                 // Интерполяция скоростей (если есть)
                 if (!p1.velocities.empty() && !p2.velocities.empty()) {
                     new_point.velocities.resize(num_joints);
@@ -736,14 +738,14 @@ private:
                         new_point.velocities[j] = p1.velocities[j] + ratio * (p2.velocities[j] - p1.velocities[j]);
                     }
                 }
-                
+
                 interpolated.joint_trajectory.points.push_back(new_point);
             }
         }
-    
+
         // Добавляем последнюю точку
         interpolated.joint_trajectory.points.push_back(points.back());
-        
+
         return interpolated;
     }
 
@@ -807,10 +809,10 @@ private:
             RCLCPP_ERROR(get_logger(), "isValid: joint names and positions size mismatch");
             return false;
         }
-        // Ждём, пока сервис станет доступен 
+        // Ждём, пока сервис станет доступен
         if (!validity_client_->wait_for_service(std::chrono::seconds(1))) {
             RCLCPP_ERROR(get_logger(), "Validity service not available");
-            return false;  
+            return false;
         }
         auto request = std::make_shared<moveit_msgs::srv::GetStateValidity::Request>();
         request->robot_state.joint_state.name = joint_names;
@@ -830,7 +832,7 @@ private:
         std::vector<double> home_right_vec(HOME_RIGHT.begin(), HOME_RIGHT.end());
         move_to_pose_angles(home_right_vec);
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));      
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
         disable();
         return;
     }
@@ -853,7 +855,7 @@ private:
             cmd.dq_target[i] = 0.0f;
             // q_target пока не заполняем
         }
-        // По умолчанию q_target 
+        // По умолчанию q_target
         if (!prev_command) {
             for (int idx : ALL_ARM_MOTORS) {
                 cmd.q_target[idx] = current_state->q[idx];
@@ -933,7 +935,7 @@ private:
                                         current_goal_handle_.reset();
                                     }
                                 }
-                                
+
                                 if (!prev_command) {
                                     for (int idx : ALL_ARM_MOTORS) {
                                         cmd.q_target[idx] = current_state->q[idx];
@@ -969,8 +971,8 @@ private:
                                 "right_shoulder_pitch_joint", "right_shoulder_roll_joint", "right_shoulder_yaw_joint",
                                 "right_elbow_joint", "right_wrist_roll_joint", "right_wrist_pitch_joint", "right_wrist_yaw_joint"
                             };
-                            const int left_start = LEFT_SHOULDER_PITCH;   
-                            const int right_start = RIGHT_SHOULDER_PITCH; 
+                            const int left_start = LEFT_SHOULDER_PITCH;
+                            const int right_start = RIGHT_SHOULDER_PITCH;
 
                             // Если нет ожидающего запроса, отправляем новый асинхронный запрос
                             if (!is_waiting_for_collision_result_) {
@@ -988,7 +990,7 @@ private:
                                 request->robot_state.joint_state.effort.resize(arm_joint_names.size(), 0.0);
                                 // Асинхронная отправка
                                 auto future_raw = validity_client_->async_send_request(request);
-                                collision_future_ = future_raw;   
+                                collision_future_ = future_raw;
                                 is_waiting_for_collision_result_ = true;
                             }
 
@@ -1126,10 +1128,10 @@ private:
         try {
             std::string side_str = (side == dftp_hand::HandSide::LEFT) ? "LEFT" : "RIGHT";
             RCLCPP_INFO(this->get_logger(), "Executing command on %s hand...", side_str.c_str());
-            
+
             // Библиотека dftp_hand_control блокирует поток до получения ответа от драйвера
             hand_controller_->executeGesture(side, gesture);
-            
+
             // Дополнительная синхронизация: ждём стабилизации пальцев перед следующей командой руки
             std::this_thread::sleep_for(std::chrono::milliseconds(stabilization_ms));
             return true;
@@ -1145,10 +1147,10 @@ private:
         dftp_hand::HandSide left_side, dftp_hand::Gesture left_gesture,
         dftp_hand::HandSide right_side, dftp_hand::Gesture right_gesture,
         int stabilization_ms = 600) {
-        
+
         std::lock_guard<std::mutex> lock(state_mutex_);
         if (enable_control_ != EnableControl::ENABLED || !hand_controller_) return false;
-        
+
         try {
             hand_controller_->executeGestureParallel(left_side, left_gesture, right_side, right_gesture);
             std::this_thread::sleep_for(std::chrono::milliseconds(stabilization_ms));
@@ -1198,18 +1200,19 @@ private:
             std::lock_guard<std::mutex> lock(state_mutex_);
             state_of_action_ = StateOfAction::HOLDING_POSE;
             is_waiting_for_collision_result_ = false;
-            collision_future_ = std::shared_future<std::shared_ptr<moveit_msgs::srv::GetStateValidity::Response>>();        }
+            collision_future_ = std::shared_future<std::shared_ptr<moveit_msgs::srv::GetStateValidity::Response>>();
+        }
         is_busy_ = false;
         return rclcpp_action::CancelResponse::ACCEPT;
     }
 
     void handle_accepted(const std::shared_ptr<GoalHandleMotionPlan> goal_handle) {
-        
+
         if (is_busy_) {
             RCLCPP_WARN(get_logger(), "Another goal already in progress, rejecting new one");
             auto result = std::make_shared<MotionPlan::Result>();
             result->success = false;
-            goal_handle->abort(result); 
+            goal_handle->abort(result);
             return;
         }
         is_busy_ = true;
@@ -1238,9 +1241,9 @@ private:
         // Включаем управление руками
         enable();
         std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-        
+
         move_to_pose(0.33, -0.31, 0.4);
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000)); 
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
         execute_hand_gesture(dftp_hand::HandSide::RIGHT, dftp_hand::Gesture::POINT_BUTTON, 800);
 
@@ -1248,13 +1251,13 @@ private:
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
         execute_hand_gesture(dftp_hand::HandSide::RIGHT, dftp_hand::Gesture::FREE_WRIST, 800);
-        
+
         move_to_pose(0.33, -0.31, 0.4);
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000));   
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
         // move_to_pose(current_handle_xyz_[0] - 0.1, current_handle_xyz_[1], current_handle_xyz_[2]);
 
-        // std::this_thread::sleep_for(std::chrono::milliseconds(5000));      
+        // std::this_thread::sleep_for(std::chrono::milliseconds(5000));
 
         // Планируем траекторию и двигаем руку в точку
         // move_to_pose(current_handle_xyz_[0], current_handle_xyz_[1], current_handle_xyz_[2]);
@@ -1348,12 +1351,13 @@ private:
     // Управление нейросетевыми действиями
     std::unique_ptr<NeuralActionManager> neural_manager_;
     std::shared_ptr<unitree_hg::msg::LowState> last_low_state_;
-    
+
     // Для асинхронной проверки коллизий
-    std::shared_future<std::shared_ptr<moveit_msgs::srv::GetStateValidity::Response>> collision_future_;    std::vector<float> last_safe_neural_cmd_;
+    std::shared_future<std::shared_ptr<moveit_msgs::srv::GetStateValidity::Response>> collision_future_;
+    std::vector<float> last_safe_neural_cmd_;
     bool is_waiting_for_collision_result_;
 
-    std::unique_ptr<dftp_hand::HandController> hand_controller_; 
+    std::unique_ptr<dftp_hand::HandController> hand_controller_;
     // Прокси-узел для кистей (чтобы не уничтожился после конструктора)
     rclcpp::Node::SharedPtr hand_proxy_node_;
 
@@ -1387,6 +1391,3 @@ int main(int argc, char ** argv) {
     rclcpp::shutdown();
     return 0;
 }
-
-
-
