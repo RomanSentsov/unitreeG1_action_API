@@ -522,6 +522,7 @@ private:
         RCLCPP_WARN(this->get_logger(), "EMERGENCY mode activated");
         is_waiting_for_collision_result_ = false;
         collision_future_ = std::shared_future<bool>();
+        is_busy_ = false;
     }
 
     void execute_traj(const moveit_msgs::msg::RobotTrajectory& traj) {
@@ -1206,9 +1207,21 @@ private:
             collision_future_ = std::shared_future<bool>();
         }
         return rclcpp_action::CancelResponse::ACCEPT;
+        is_busy_ = false;
     }
 
     void handle_accepted(const std::shared_ptr<GoalHandleMotionPlan> goal_handle) {
+        
+        if (is_busy_) {
+            RCLCPP_WARN(get_logger(), "Another goal already in progress, rejecting new one");
+            auto result = std::make_shared<MotionPlan::Result>();
+            result->success = false;
+            current_goal_handle_->abort(result);
+            current_goal_handle_.reset();
+            return;
+        }
+        is_busy_ = true;
+
         current_goal_handle_ = goal_handle;
         const auto goal = goal_handle->get_goal();
 
@@ -1258,6 +1271,8 @@ private:
 
         soft_disable();
 
+        is_busy_ = false;
+
         //std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     }
 
@@ -1265,6 +1280,17 @@ private:
         RCLCPP_INFO(get_logger(), "Starting neural action with model: %s", model_path.c_str());
 
         enable();
+
+        // Инициализируем последнюю безопасную команду текущим состоянием суставов (чтобы не было нулей)
+        if (last_low_state_) {
+            std::vector<float> current_positions(29);
+            for (int i = 0; i < 29; ++i) {
+                current_positions[i] = last_low_state_->motor_state[i].q;
+            }
+            last_safe_neural_cmd_ = current_positions;
+        } else {
+            RCLCPP_WARN(get_logger(), "No low_state available, last_safe_neural_cmd_ remains zeros (unsafe!)");
+        }
 
         if (!neural_manager_->start("button_press", model_path, timeout)) {
             RCLCPP_ERROR(get_logger(), "Failed to start neural manager");
@@ -1288,7 +1314,14 @@ private:
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
+        // Останавливаем нейроменеджер, чтобы прекратить генерацию новых команд
+        neural_manager_->stop();
+        // Даём 5 мс, чтобы command_generator перешёл в HOLDING_POSE
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
         soft_disable();
+
+        is_busy_ = false;
 
         if (current_goal_handle_) {
             auto result = std::make_shared<MotionPlan::Result>();
@@ -1336,6 +1369,7 @@ private:
     std::mutex state_mutex_;
     EnableControl enable_control_;
     StateOfAction state_of_action_;
+    bool is_busy_ = false;   // флаг занятости: true – действие выполняется
 
     const std::unordered_map<std::string, int> JOINT_NAME_TO_INDEX = {
         {"left_shoulder_pitch_joint", LEFT_SHOULDER_PITCH},
