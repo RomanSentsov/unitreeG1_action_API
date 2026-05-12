@@ -521,8 +521,7 @@ private:
         state_of_action_ = StateOfAction::HOLDING_POSE;
         RCLCPP_WARN(this->get_logger(), "EMERGENCY mode activated");
         is_waiting_for_collision_result_ = false;
-        collision_future_ = std::shared_future<bool>();
-        is_busy_ = false;
+        collision_future_ = std::shared_future<std::shared_ptr<moveit_msgs::srv::GetStateValidity::Response>>();        is_busy_ = false;
     }
 
     void execute_traj(const moveit_msgs::msg::RobotTrajectory& traj) {
@@ -611,7 +610,6 @@ private:
             } else {
                 RCLCPP_ERROR(this->get_logger(), "Planning failed, error code: %d",
                              response->motion_plan_response.error_code.val);
-            }
         } else {
             RCLCPP_ERROR(this->get_logger(), "Planning service timeout");
         }
@@ -990,7 +988,7 @@ private:
                                 request->robot_state.joint_state.effort.resize(arm_joint_names.size(), 0.0);
                                 // Асинхронная отправка
                                 auto future_raw = validity_client_->async_send_request(request);
-                                collision_future_ = future_raw.share();
+                                collision_future_ = future_raw;   
                                 is_waiting_for_collision_result_ = true;
                             }
 
@@ -999,21 +997,17 @@ private:
                             if (is_waiting_for_collision_result_) {
                                 auto status = collision_future_.wait_for(std::chrono::milliseconds(1));
                                 if (status == std::future_status::ready) {
-                                    bool coll_free = collision_future_.get();
+                                    auto response = collision_future_.get();
                                     is_waiting_for_collision_result_ = false;
-                                    if (coll_free) {
+                                    if (response->valid) {
                                         last_safe_neural_cmd_ = neural_cmd;
                                         use_new_cmd = true;
                                     } else {
                                         RCLCPP_WARN(get_logger(), "Collision detected! Using last safe command.");
                                     }
                                 } else {
-                                    // Ответ ещё не пришёл – используем последнюю безопасную команду
                                     use_new_cmd = false;
                                 }
-                            } else {
-                                // Нет ожидающих запросов – все команды уже проверены и безопасны
-                                use_new_cmd = true;
                             }
 
                             // Выбираем, какую команду отправить на моторы
@@ -1204,8 +1198,7 @@ private:
             std::lock_guard<std::mutex> lock(state_mutex_);
             state_of_action_ = StateOfAction::HOLDING_POSE;
             is_waiting_for_collision_result_ = false;
-            collision_future_ = std::shared_future<bool>();
-        }
+            collision_future_ = std::shared_future<std::shared_ptr<moveit_msgs::srv::GetStateValidity::Response>>();        }
         is_busy_ = false;
         return rclcpp_action::CancelResponse::ACCEPT;
     }
@@ -1357,8 +1350,7 @@ private:
     std::shared_ptr<unitree_hg::msg::LowState> last_low_state_;
     
     // Для асинхронной проверки коллизий
-    std::shared_future<bool> collision_future_;
-    std::vector<float> last_safe_neural_cmd_;
+    std::shared_future<std::shared_ptr<moveit_msgs::srv::GetStateValidity::Response>> collision_future_;    std::vector<float> last_safe_neural_cmd_;
     bool is_waiting_for_collision_result_;
 
     std::unique_ptr<dftp_hand::HandController> hand_controller_; 
