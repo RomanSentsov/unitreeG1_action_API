@@ -274,7 +274,17 @@ private:
         for (int i = 0; i < 29; ++i) {
             obs[63 + i] = prev_action_[i];
         }
-
+        // ----- Фиктивная цель (кнопка) -----
+        // Координаты из execute_button_press: x=0.33, y=-0.31, z=0.4
+        // Ориентация: единичный кватернион (без поворота)
+        obs[626] = 0.33f;   // x
+        obs[627] = -0.31f;  // y
+        obs[628] = 0.4f;    // z
+        obs[629] = 0.0f;    // qx
+        obs[630] = 0.0f;    // qy
+        obs[631] = 0.0f;    // qz
+        obs[632] = 1.0f;    // qw
+        // ---------------------------------
         // Остальные 541 число (target_ref, rel_pose_target) пока нули.
         return obs;
     }
@@ -1032,6 +1042,17 @@ private:
                 break;
         }
 
+        // ----- Ограничение скорости (rate limiter) TODO: убрать егго потом-----
+        static std::array<float, G1_NUM_MOTOR> last_q_target = {};   // хранит предыдущую команду
+        const float MAX_DELTA = 0.05f;  // максимальное изменение за один шаг (0.05 рад ≈ 3°)
+        for (int i = 0; i < G1_NUM_MOTOR; ++i) {
+            float diff = cmd.q_target[i] - last_q_target[i];
+            if (std::abs(diff) > MAX_DELTA) {
+                cmd.q_target[i] = last_q_target[i] + (diff > 0 ? MAX_DELTA : -MAX_DELTA);
+            }
+        }
+        last_q_target = cmd.q_target;
+        // ------------------------------------------------
         // Отправляем сгенерированную команду в буфер текущих команд
         current_command_buffer_.SetData(cmd);
     }
