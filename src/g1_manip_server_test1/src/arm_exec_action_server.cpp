@@ -1248,7 +1248,7 @@ private:
             case 2:
             {
                 // Пока путь жёсткий, потом вынесем в конфиг
-                std::string model_path = "/home/egorlekomtsev/Downloads/2026-03-31_15-52-55-Button-Press-a(1)/2026-03-31_15-52-55-Button-Press-a/exported/policy.pt";
+                std::string model_path = "/home/unitree/venzoll_research/2026-03-31_15-52-55-Button-Press-a/exported/policy.pt";
                 std::thread([this, model_path]() { execute_neural_action(model_path); }).detach();
                 break;
             }
