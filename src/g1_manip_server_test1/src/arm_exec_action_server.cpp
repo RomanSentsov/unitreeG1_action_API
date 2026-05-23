@@ -262,6 +262,8 @@ public:
         }
 
         q_target_out = actionToQTarget(current_action_, low_state);
+        RCLCPP_INFO(node_->get_logger(), "Computed q_target: waist=%.3f, left_shoulder_pitch=%.3f, left_shoulder_roll=%.3f", 
+            q_target_out[WAIST_YAW], q_target_out[LEFT_SHOULDER_PITCH], q_target_out[LEFT_SHOULDER_ROLL]);
         return true;
     }
 
@@ -306,7 +308,8 @@ private:
             float pos = low_state->motor_state[idx].q - DEFAULT_ANGLES_ACTIVE[i];
             obs[3 + i] = pos * dof_pos_scale_;
         }
-
+        RCLCPP_INFO(node_->get_logger(), "Obs joint_pos[0..2]: %.3f, %.3f, %.3f", 
+            obs[3], obs[4], obs[5]);
         // 3. joint_vel (15)
         for (size_t i = 0; i < ACTIVE_JOINT_INDICES.size(); ++i) {
             int idx = ACTIVE_JOINT_INDICES[i];
@@ -357,6 +360,10 @@ private:
             return;
         }
         current_action_ = action;   // raw action
+        std::stringstream ss;
+        ss << "Raw action (first 10): ";
+        for (int i = 0; i < 10 && i < (int)action.size(); ++i) ss << action[i] << " ";
+        RCLCPP_INFO(node_->get_logger(), "%s", ss.str().c_str());
         prev_action_ = action;      // raw action для следующего шага
     }
 
