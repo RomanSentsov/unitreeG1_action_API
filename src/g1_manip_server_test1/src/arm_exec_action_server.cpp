@@ -981,6 +981,12 @@ private:
 
                         std::vector<float> neural_cmd;
                         if (neural_manager_->getCurrentCommand(neural_cmd, last_low_state_)) {
+                            std::stringstream ss;
+                            ss << "Neural cmd (first 10): ";
+                            for (int i = 0; i < 10 && i < (int)neural_cmd.size(); ++i) {
+                                ss << neural_cmd[i] << " ";
+                            }
+                            RCLCPP_INFO(get_logger(), "%s", ss.str().c_str());
                             // ----- Асинхронная проверка коллизий для рук (14 суставов) -----
                             // Имена суставов рук в порядке, соответствующем индексам G1JointIndex
                             static const std::vector<std::string> arm_joint_names = {
@@ -1256,7 +1262,7 @@ private:
             case 2:
             {
                 // Пока путь жёсткий, потом вынесем в конфиг
-                std::string model_path = "/home/unitree/venzoll_research/2026-03-31_15-52-55-Button-Press-a/exported/policy.pt";
+                std::string model_path = "/home/unitree/venzoll_research/policies/Button_Press_UB.pt";
                 std::thread([this, model_path]() { execute_neural_action(model_path); }).detach();
                 break;
             }
