@@ -183,9 +183,14 @@ struct MotorState {
 // ====================================================================
 class NeuralActionManager {
 public:
-    NeuralActionManager(rclcpp::Node* node) : node_(node), active_(false),
-        prev_action_(29, 0.0f), current_action_(29, 0.0f) {}
-
+    NeuralActionManager(rclcpp::Node* node) 
+    : node_(node), active_(false),
+      prev_action_(29, 0.0f), current_action_(29, 0.0f),
+      active_joint_indices_({12, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28}),
+      default_angles_({0.0f, 0.35f, 0.16f, 0.0f, 0.87f, 0.0f, 0.0f, 0.0f, 0.35f, -0.16f, 0.0f, 0.87f, 0.0f, 0.0f, 0.0f}),
+      dof_pos_scale_(1.0f), dof_vel_scale_(1.0f), action_scale_(0.5f) 
+    {}
+        
     bool start(const std::string& action_name, const std::string& model_path, double timeout_sec = 30.0) {
         if (active_) {
             RCLCPP_WARN(node_->get_logger(), "NeuralActionManager already active, stopping previous");
@@ -207,7 +212,9 @@ public:
         std::fill(current_action_.begin(), current_action_.end(), 0.0f);
         std::fill(prev_action_.begin(), prev_action_.end(), 0.0f);
         return true;
+
     }
+
 
     void stop() {
         active_ = false;
@@ -243,13 +250,12 @@ public:
 
 private:
     std::vector<float> buildObservation(const unitree_hg::msg::LowState::SharedPtr low_state) {
-        // Вектор наблюдений размером 93
-        std::vector<float> obs(93, 0.0f);
+        std::vector<float> obs(57, 0.0f);
         if (!low_state) return obs;
 
         const auto& imu = low_state->imu_state;
 
-        // 1. gravity_orientation (3) – из акселерометра, как в get_gravity_orientation
+        // gravity_orientation (3)
         float ax = imu.accelerometer[0];
         float ay = imu.accelerometer[1];
         float az = imu.accelerometer[2];
@@ -260,39 +266,42 @@ private:
             obs[2] = az / norm;
         }
 
-        // 2. joint_pos (27) – первые 27 моторов (без кистей), без нормализации и вычитания дефолтов (позже можно добавить)
-        for (int i = 0; i < 27; ++i) {
-            obs[3 + i] = low_state->motor_state[i].q;
+        // joint_pos (15) – активные суставы, вычитание default_angles, масштабирование
+        for (size_t i = 0; i < active_joint_indices_.size(); ++i) {
+            int idx = active_joint_indices_[i];
+            float pos = low_state->motor_state[idx].q - default_angles_[i];
+            obs[3 + i] = pos * dof_pos_scale_;
         }
 
-        // 3. joint_vel (27)
-        for (int i = 0; i < 27; ++i) {
-            obs[30 + i] = low_state->motor_state[i].dq;
+        // joint_vel (15)
+        for (size_t i = 0; i < active_joint_indices_.size(); ++i) {
+            int idx = active_joint_indices_[i];
+            obs[18 + i] = low_state->motor_state[idx].dq * dof_vel_scale_;
         }
 
-        // 4. previous actions (29) – сохраняются в prev_action_ (уже есть)
-        for (int i = 0; i < 29; ++i) {
-            obs[57 + i] = prev_action_[i];
+        // previous actions (17) – берём первые 17 из prev_action_
+        for (int i = 0; i < 17; ++i) {
+            obs[33 + i] = prev_action_[i];
         }
 
-        // 5. phase, sin_phase – вычисляем от времени с момента старта политики
+        // phase, sin_phase
         double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - start_time_).count();
-        double period = 10.0;   // как в оригинале
+        double period = 10.0;
         double phase = std::min(elapsed, period) / period;
         double sin_phase = std::sin(2.0 * M_PI * phase);
-        obs[86] = static_cast<float>(phase);
-        obs[87] = static_cast<float>(sin_phase);
+        obs[50] = static_cast<float>(phase);
+        obs[51] = static_cast<float>(sin_phase);
 
-        // 6. target_loc (3) – координаты цели (пока жёстко, потом можно заменить)
-        float target_x = 0.33f, target_y = -0.31f, target_z = 0.4f;
-        obs[88] = target_x;
-        obs[89] = target_y;
-        obs[90] = target_z;
+        // target_loc (3) – диапазон из DreamControl
+        float target_x = 0.48f, target_y = -0.20f, target_z = 0.22f;
+        obs[52] = target_x;
+        obs[53] = target_y;
+        obs[54] = target_z;
 
-        // 7. right_hand_state и right_hand_state_1 (2)
+        // right_hand_state и right_hand_state_1 (2)
         float right_hand_state = (elapsed > 2.0 && elapsed < 8.0) ? 1.0f : 0.0f;
-        obs[91] = right_hand_state;
-        obs[92] = right_hand_state;
+        obs[55] = right_hand_state;
+        obs[56] = right_hand_state;
 
         return obs;
     }
@@ -300,15 +309,22 @@ private:
     void updateNeural(const std::vector<float>& obs) {
         if (!policy_) return;
         std::vector<float> action = policy_->act(obs);
-        if (action.size() >= 29) {
-            current_action_ = action;
-            // Сохраняем текущее действие как предыдущее для следующего вызова
-            prev_action_ = current_action_;
+        if (action.size() >= 17) {
+            // Обнуляем current_action_ (29 элементов)
+            std::fill(current_action_.begin(), current_action_.end(), 0.0f);
+            // Заполняем первые 17 масштабированными значениями
+            for (int i = 0; i < 17; ++i) {
+                current_action_[i] = action[i] * action_scale_;
+            }
+            // Сохраняем предыдущее действие (только первые 17, остальные нули)
+            std::fill(prev_action_.begin(), prev_action_.end(), 0.0f);
+            for (int i = 0; i < 17; ++i) {
+                prev_action_[i] = current_action_[i];
+            }
         } else {
-            RCLCPP_WARN(node_->get_logger(), "Policy returned wrong size: %zu, expected 29", action.size());
+            RCLCPP_WARN(node_->get_logger(), "Policy returned wrong size: %zu, expected 17", action.size());
         }
     }
-
     rclcpp::Node* node_;
     std::unique_ptr<NeuralPolicy> policy_;
     bool active_;
@@ -317,6 +333,11 @@ private:
     double timeout_sec_;
     std::vector<float> prev_action_;      // предыдущее действие (29)
     std::vector<float> current_action_;   // последнее действие от нейросети (29)
+    std::vector<int> active_joint_indices_;   // индексы активных суставов (15 штук)
+    std::vector<float> default_angles_;       // дефолтные углы для активных суставов (15)
+    float dof_pos_scale_ = 1.0f;
+    float dof_vel_scale_ = 1.0f;
+    float action_scale_ = 0.5f;               // масштаб действий (из YAML)
 };
 
 // ====================================================================
@@ -972,7 +993,6 @@ private:
 
                     case StateOfAction::NEURO_DRIVEN:
                     {
-                        // Проверка, что менеджер активен и есть свежий low_state
                         if (!neural_manager_ || !neural_manager_->isActive() || !last_low_state_) {
                             std::lock_guard<std::mutex> lock(state_mutex_);
                             state_of_action_ = StateOfAction::HOLDING_POSE;
@@ -981,38 +1001,39 @@ private:
 
                         std::vector<float> neural_cmd;
                         if (neural_manager_->getCurrentCommand(neural_cmd, last_low_state_)) {
-                            std::stringstream ss;
-                            ss << "Neural cmd (first 10): ";
-                            for (int i = 0; i < 10 && i < (int)neural_cmd.size(); ++i) {
-                                ss << neural_cmd[i] << " ";
+                            // Сначала заполняем cmd.q_target из neural_cmd (17 значений) + удержание для остальных
+                            for (int i = 0; i < G1_NUM_MOTOR; ++i) {
+                                if (i < (int)neural_cmd.size())
+                                    cmd.q_target[i] = neural_cmd[i];
+                                else
+                                    cmd.q_target[i] = current_state->q[i];
                             }
-                            RCLCPP_INFO(get_logger(), "%s", ss.str().c_str());
+
                             // ----- Асинхронная проверка коллизий для рук (14 суставов) -----
-                            // Имена суставов рук в порядке, соответствующем индексам G1JointIndex
+                            // Имена суставов рук
                             static const std::vector<std::string> arm_joint_names = {
                                 "left_shoulder_pitch_joint", "left_shoulder_roll_joint", "left_shoulder_yaw_joint",
                                 "left_elbow_joint", "left_wrist_roll_joint", "left_wrist_pitch_joint", "left_wrist_yaw_joint",
                                 "right_shoulder_pitch_joint", "right_shoulder_roll_joint", "right_shoulder_yaw_joint",
                                 "right_elbow_joint", "right_wrist_roll_joint", "right_wrist_pitch_joint", "right_wrist_yaw_joint"
                             };
-                            const int left_start = LEFT_SHOULDER_PITCH;
-                            const int right_start = RIGHT_SHOULDER_PITCH;
-
+                            // Индексы в neural_cmd: 
+                            // 0 - waist, 1..7 - левая рука, 8..14 - правая рука
+                            const int left_start_cmd = 1;
+                            const int right_start_cmd = 8;
                             // Если нет ожидающего запроса, отправляем новый асинхронный запрос
                             if (!is_waiting_for_collision_result_) {
-                                // Извлекаем позиции только для рук из neural_cmd
                                 std::vector<double> arm_positions(arm_joint_names.size());
+                                // Извлекаем позиции рук из neural_cmd
                                 for (size_t i = 0; i < 7; ++i) {
-                                    arm_positions[i] = neural_cmd[left_start + i];
-                                    arm_positions[i + 7] = neural_cmd[right_start + i];
+                                    arm_positions[i] = neural_cmd[left_start_cmd + i];
+                                    arm_positions[i + 7] = neural_cmd[right_start_cmd + i];
                                 }
-                                // Создаём запрос
                                 auto request = std::make_shared<moveit_msgs::srv::GetStateValidity::Request>();
                                 request->robot_state.joint_state.name = arm_joint_names;
                                 request->robot_state.joint_state.position = arm_positions;
                                 request->robot_state.joint_state.velocity.resize(arm_joint_names.size(), 0.0);
                                 request->robot_state.joint_state.effort.resize(arm_joint_names.size(), 0.0);
-                                // Асинхронная отправка
                                 auto future_raw = validity_client_->async_send_request(request);
                                 collision_future_ = future_raw;
                                 is_waiting_for_collision_result_ = true;
@@ -1034,18 +1055,20 @@ private:
                                 } else {
                                     use_new_cmd = false;
                                 }
+                            } else {
+                                use_new_cmd = true;
                             }
 
-                            // Выбираем, какую команду отправить на моторы
-                            const std::vector<float>& cmd_to_use = use_new_cmd ? neural_cmd : last_safe_neural_cmd_;
-                            for (int i = 0; i < G1_NUM_MOTOR; ++i) {
-                                if (i < (int)cmd_to_use.size())
-                                    cmd.q_target[i] = cmd_to_use[i];
-                                else
-                                    cmd.q_target[i] = current_state->q[i];
+                            // Если команда не прошла проверку, перезаписываем cmd.q_target из last_safe_neural_cmd_
+                            if (!use_new_cmd) {
+                                for (int i = 0; i < G1_NUM_MOTOR; ++i) {
+                                    if (i < (int)last_safe_neural_cmd_.size())
+                                        cmd.q_target[i] = last_safe_neural_cmd_[i];
+                                    else
+                                        cmd.q_target[i] = current_state->q[i];
+                                }
                             }
                         } else {
-                            // Если getCurrentCommand вернул false – нейрорежим завершён
                             std::lock_guard<std::mutex> lock(state_mutex_);
                             state_of_action_ = StateOfAction::HOLDING_POSE;
                             RCLCPP_INFO(get_logger(), "Neural action finished, switching to HOLDING_POSE");
