@@ -242,50 +242,58 @@ public:
     }
 
 private:
-    // Сборка вектора наблюдений размером 633 из low_state
     std::vector<float> buildObservation(const unitree_hg::msg::LowState::SharedPtr low_state) {
-        std::vector<float> obs(633, 0.0f);
+        // Вектор наблюдений размером 93
+        std::vector<float> obs(93, 0.0f);
         if (!low_state) return obs;
 
         const auto& imu = low_state->imu_state;
 
-        obs[3] = imu.gyroscope[0];
-        obs[4] = imu.gyroscope[1];
-        obs[5] = imu.gyroscope[2];
-
+        // 1. gravity_orientation (3) – из акселерометра, как в get_gravity_orientation
         float ax = imu.accelerometer[0];
         float ay = imu.accelerometer[1];
         float az = imu.accelerometer[2];
         float norm = std::sqrt(ax*ax + ay*ay + az*az);
         if (norm > 0.001f) {
-            obs[6] = ax / norm;
-            obs[7] = ay / norm;
-            obs[8] = az / norm;
+            obs[0] = ax / norm;
+            obs[1] = ay / norm;
+            obs[2] = az / norm;
         }
 
+        // 2. joint_pos (27) – первые 27 моторов (без кистей), без нормализации и вычитания дефолтов (позже можно добавить)
         for (int i = 0; i < 27; ++i) {
-            obs[9 + i] = low_state->motor_state[i].q;
+            obs[3 + i] = low_state->motor_state[i].q;
         }
 
+        // 3. joint_vel (27)
         for (int i = 0; i < 27; ++i) {
-            obs[36 + i] = low_state->motor_state[i].dq;
+            obs[30 + i] = low_state->motor_state[i].dq;
         }
 
+        // 4. previous actions (29) – сохраняются в prev_action_ (уже есть)
         for (int i = 0; i < 29; ++i) {
-            obs[63 + i] = prev_action_[i];
+            obs[57 + i] = prev_action_[i];
         }
-        // ----- Фиктивная цель (кнопка) -----
-        // Координаты из execute_button_press: x=0.33, y=-0.31, z=0.4
-        // Ориентация: единичный кватернион (без поворота)
-        obs[626] = 0.33f;   // x
-        obs[627] = -0.31f;  // y
-        obs[628] = 0.4f;    // z
-        obs[629] = 0.0f;    // qx
-        obs[630] = 0.0f;    // qy
-        obs[631] = 0.0f;    // qz
-        obs[632] = 1.0f;    // qw
-        // ---------------------------------
-        // Остальные 541 число (target_ref, rel_pose_target) пока нули.
+
+        // 5. phase, sin_phase – вычисляем от времени с момента старта политики
+        double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - start_time_).count();
+        double period = 10.0;   // как в оригинале
+        double phase = std::min(elapsed, period) / period;
+        double sin_phase = std::sin(2.0 * M_PI * phase);
+        obs[86] = static_cast<float>(phase);
+        obs[87] = static_cast<float>(sin_phase);
+
+        // 6. target_loc (3) – координаты цели (пока жёстко, потом можно заменить)
+        float target_x = 0.33f, target_y = -0.31f, target_z = 0.4f;
+        obs[88] = target_x;
+        obs[89] = target_y;
+        obs[90] = target_z;
+
+        // 7. right_hand_state и right_hand_state_1 (2)
+        float right_hand_state = (elapsed > 2.0 && elapsed < 8.0) ? 1.0f : 0.0f;
+        obs[91] = right_hand_state;
+        obs[92] = right_hand_state;
+
         return obs;
     }
 
