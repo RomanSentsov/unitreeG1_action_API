@@ -538,8 +538,6 @@ public:
         RCLCPP_INFO(this->get_logger(), "Manipulation Action Server started");
         RCLCPP_INFO(this->get_logger(), "Initial state: DISABLED / HOLDING_POSE");
 
-        is_waiting_for_collision_result_ = false;
-        last_safe_neural_cmd_.assign(29, 0.0f);
     }
 
 private:
@@ -594,7 +592,6 @@ private:
         if (neural_manager_) neural_manager_->stop();
         state_of_action_ = StateOfAction::HOLDING_POSE;
         RCLCPP_WARN(this->get_logger(), "EMERGENCY mode activated");
-        is_waiting_for_collision_result_ = false;
         collision_future_ = std::shared_future<std::shared_ptr<moveit_msgs::srv::GetStateValidity::Response>>();
         is_busy_ = false;
         has_last_safe_q_target_ = false;
@@ -1288,7 +1285,6 @@ private:
         {
             std::lock_guard<std::mutex> lock(state_mutex_);
             state_of_action_ = StateOfAction::HOLDING_POSE;
-            is_waiting_for_collision_result_ = false;
             collision_future_ = std::shared_future<std::shared_ptr<moveit_msgs::srv::GetStateValidity::Response>>();
             has_last_safe_q_target_ = false;
         }
@@ -1367,16 +1363,6 @@ private:
         enable();
         rate_limiter_initialized_ = false;
 
-        // Инициализируем последнюю безопасную команду текущим состоянием суставов (чтобы не было нулей)
-        if (last_low_state_) {
-            std::vector<float> current_positions(29);
-            for (int i = 0; i < 29; ++i) {
-                current_positions[i] = last_low_state_->motor_state[i].q;
-            }
-            last_safe_neural_cmd_ = current_positions;
-        } else {
-            RCLCPP_WARN(get_logger(), "No low_state available, last_safe_neural_cmd_ remains zeros (unsafe!)");
-        }
 
         if (!neural_manager_->start("button_press", model_path, timeout)) {
             RCLCPP_ERROR(get_logger(), "Failed to start neural manager");
@@ -1445,6 +1431,8 @@ private:
 
     // Для асинхронной проверки коллизий
     std::shared_future<std::shared_ptr<moveit_msgs::srv::GetStateValidity::Response>> collision_future_;
+    bool is_waiting_for_collision_result_ = false;
+    std::vector<float> last_safe_neural_cmd_; 
     std::array<float, G1_NUM_MOTOR> last_safe_q_target_;
     bool has_last_safe_q_target_ = false;
     // Rate limiter
