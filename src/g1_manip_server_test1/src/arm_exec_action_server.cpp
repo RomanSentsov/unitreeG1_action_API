@@ -349,7 +349,7 @@ private:
 
         // 6. target_loc (3) – пока захардкожено, позже из current_handle_xyz_
         // Зажимаем в диапазоны DreamControl: x: 0.43-0.54, y: -0.27- -0.13, z: 0.13-0.31
-        float target_x = 0.48f, target_y = -0.20f, target_z = 0.22f;
+        float target_x = 0.48f, target_y = -0.20f, target_z = 0.28f;
         obs[52] = target_x;
         obs[53] = target_y;
         obs[54] = target_z;
