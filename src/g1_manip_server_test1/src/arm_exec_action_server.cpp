@@ -1514,7 +1514,61 @@ private:
         collision_valid_count_ = 0;
         collision_invalid_count_ = 0;
         fallback_to_last_safe_count_ = 0;
-        move_to_default_pose();   
+        //move_to_default_pose();   
+        // Получаем текущее состояние робота
+        auto current_state = motor_state_buffer_.GetData();
+        if (!current_state) {
+            RCLCPP_ERROR(get_logger(), "No robot state, cannot move to default pose");
+            return;
+        }
+
+        // Формируем команду LowCmd для удержания дефолтных углов
+        unitree_hg::msg::LowCmd default_cmd;
+        default_cmd.mode_pr = static_cast<uint8_t>(Mode::PR);
+        default_cmd.mode_machine = 0;
+
+        // Инициализируем все моторы mode=0 (демпфирование)
+        for (int i = 0; i < G1_NUM_MOTOR; ++i) {
+            default_cmd.motor_cmd[i].mode = 0;
+            default_cmd.motor_cmd[i].tau = 0.0;
+            default_cmd.motor_cmd[i].q = current_state->q[i];   // удержание текущих
+            default_cmd.motor_cmd[i].dq = 0.0;
+            default_cmd.motor_cmd[i].kp = 0.0;
+            default_cmd.motor_cmd[i].kd = 0.0;
+        }
+
+        // Включаем управление для активных суставов (mode=1)
+        for (int idx : ALL_ARM_MOTORS) {
+            default_cmd.motor_cmd[idx].mode = 1;
+        }
+        for (int idx : {WAIST_YAW, WAIST_ROLL, WAIST_PITCH}) {
+            default_cmd.motor_cmd[idx].mode = 1;
+        }
+        // NOT_USED_JOINT = 29 – управление включено, q=1 (как в commander_callback)
+        default_cmd.motor_cmd[NOT_USED_JOINT].mode = 1;
+        default_cmd.motor_cmd[NOT_USED_JOINT].q = 1.0f;
+
+        // Устанавливаем целевые углы для активных суставов из DEFAULT_ANGLES_ACTIVE
+        for (size_t k = 0; k < ACTIVE_JOINT_INDICES.size(); ++k) {
+            int motor_idx = ACTIVE_JOINT_INDICES[k];
+            default_cmd.motor_cmd[motor_idx].q = DEFAULT_ANGLES_ACTIVE[k];
+            default_cmd.motor_cmd[motor_idx].dq = 0.0f;
+            default_cmd.motor_cmd[motor_idx].kp = Kp[motor_idx];
+            default_cmd.motor_cmd[motor_idx].kd = Kd[motor_idx];
+        }
+
+        // Для остальных моторов (ноги и т.д.) удержание текущей позы (уже заполнено выше)
+        get_crc(default_cmd);
+
+        // Публикуем команду несколько раз с интервалом, чтобы робот начал движение
+        for (int i = 0; i < 10; ++i) {
+            lowcmd_publisher_->publish(default_cmd);
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));  // 500 мс всего
+        }
+
+        // Даём время на приближение к дефолтной позе
+        RCLCPP_INFO(get_logger(), "Waiting for robot to move to default pose...");
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));  // 2 секунды на движение
 
 
         if (!neural_manager_->start("button_press", model_path, timeout)) {
