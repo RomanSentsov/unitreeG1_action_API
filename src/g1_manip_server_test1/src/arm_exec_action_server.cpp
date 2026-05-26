@@ -1460,7 +1460,7 @@ private:
             case 2:
             {
                 // Пока путь жёсткий, потом вынесем в конфиг
-                std::string model_path = "/home/unitree/test_neural_policy/unitreeG1_action_API/policies/Button_Press_UB.pt";
+                std::string model_path = "/home/unitree/venzoll_research/policies/Button_Press_UB.pt";
                 std::thread([this, model_path]() { execute_neural_action(model_path); }).detach();
                 break;
             }
