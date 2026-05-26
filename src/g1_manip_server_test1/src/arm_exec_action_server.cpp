@@ -278,7 +278,6 @@ public:
     }
 
     float getActionScale() const { return action_scale_; }
-    const std::vector<float>& getDefaultAnglesActive() const { return default_angles_active_; }
     void commitAppliedAction(const std::vector<float>& action) {
         if (action.size() == ACT_DIM) {
             prev_action_ = action;
@@ -1617,6 +1616,9 @@ private:
     bool is_busy_ = false;   // флаг занятости: true – действие выполняется
 
     const std::unordered_map<std::string, int> JOINT_NAME_TO_INDEX = {
+        {"waist_yaw_joint", WAIST_YAW},
+        {"waist_roll_joint", WAIST_ROLL},
+        {"waist_pitch_joint", WAIST_PITCH},
         {"left_shoulder_pitch_joint", LEFT_SHOULDER_PITCH},
         {"left_shoulder_roll_joint", LEFT_SHOULDER_ROLL},
         {"left_shoulder_yaw_joint", LEFT_SHOULDER_YAW},
