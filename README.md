@@ -10,6 +10,24 @@ moveit
 
 unitree_ros2
 
+## Быстрый запуск (3 терминала)
+
+```
+ros2 launch g1_moveit_desc_v3 move_group.launch.py
+
+ros2 run inspire_hand_modbus_ros2 hand_modbus_control_node
+
+ros2 run g1_manip_server_test1 arm_exec_action_server
+
+```
+
+Отправка команды:
+
+```
+ros2 action send_goal /r_arm_plan_exec g1_manip_interf_test1/action/TestServerExec "{action_code: 0}" --feedback
+```
+
+
 ## 📋 Обзор манипуляции с кистями
 
 Данный модуль реализует интеграцию библиотеки `dftp_hand_control` в низкоуровневый сервер манипуляции `g1_manip_server_test1` для выполнения комплексных действий вида:
