@@ -79,7 +79,7 @@ const std::array<float, G1_NUM_MOTOR> Kd = {
     1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 1.5, 1.5, 1.5
 };
 
-// Позиции для хоуминга рук soft_disable
+// Позиции для хоуминга рук soft_disable (правая рука)
 const std::array<double, 7> HOME_RIGHT = {
     0.25275930762290955,   // right_shoulder_pitch  (14.48°)
     -0.28710609674453735,  // right_shoulder_roll   (-16.45°)
@@ -90,6 +90,7 @@ const std::array<double, 7> HOME_RIGHT = {
     0.0020852552261203527  // right_wrist_yaw       (0.12°)
 };
 
+// Позиции для хоуминга рук soft_disable (левая рука)
 const std::array<double, 7> HOME_LEFT = {
     0.2559950351715088,    // left_shoulder_pitch   (14.67°)
     0.28693830966949463,   // left_shoulder_roll    (16.44°)
@@ -162,6 +163,7 @@ public:
     }
     
     bool getCurrentCommand(MotorCommand& cmd, const MotorState& current_state,
+                          const MotorCommand& last_command,
                           const std::unordered_map<std::string, int>& joint_map) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (state_ != State::EXECUTING) return false;
@@ -179,11 +181,14 @@ public:
             else break;
         }
         const auto& point = points[current_idx];
-        // По умолчанию – удержание текущей позы
+        
+        // Сначала заполняем команду для всех моторов из last_command (удержание позы для неактивной руки)
         for (int idx : ALL_ARM_MOTORS) {
-            cmd.q_target[idx] = current_state.q[idx];
-            cmd.dq_target[idx] = 0.0f;
+            cmd.q_target[idx] = last_command.q_target[idx];
+            cmd.dq_target[idx] = last_command.dq_target[idx];
         }
+        
+        // Затем перезаписываем моторы, которые участвуют в текущей траектории
         for (size_t j = 0; j < point.positions.size() && j < joint_mapping_.size(); ++j) {
             int motor_idx = joint_mapping_[j].second;
             if (motor_idx >= 0) {
@@ -192,6 +197,7 @@ public:
                     cmd.dq_target[motor_idx] = static_cast<float>(point.velocities[j]);
             }
         }
+        
         double total_duration = points.back().time_from_start.sec + points.back().time_from_start.nanosec * 1e-9;
         if (elapsed > total_duration + 0.1) {
             state_ = State::IDLE;
@@ -269,28 +275,16 @@ public:
         commander_timer_ = this->create_wall_timer(
             std::chrono::milliseconds(2),
             std::bind(&ManipulationActionServer::commander_callback, this));
-
         
-        // ====== ИНИЦИАЛИЗАЦИЯ КИСТЕЙ (Вариант 2: прокси-узел БЕЗ явного spin) ======
+        // ====== ИНИЦИАЛИЗАЦИЯ КИСТЕЙ ======
         try {
-            // Создаём отдельный узел-прокси ТОЛЬКО для кистей
-            // Важно: этот узел НЕ добавляется в главный executor и НЕ спинится явно
             auto hand_node = rclcpp::Node::make_shared("hand_control_proxy");
-        
-            // HandController будет использовать этот узел для сервис-клиентов
-            // При вызове executeGesture() библиотека сама создаст временный executor
-            // через spin_until_future_complete, поэтому конфликт не возникнет
             hand_controller_ = std::make_unique<dftp_hand::HandController>(hand_node);
-        
-            // Сохраняем узел как член класса, чтобы он не уничтожился
             hand_proxy_node_ = hand_node;
-        
             RCLCPP_INFO(this->get_logger(), "Hand controller initialized successfully.");
         } catch (const std::exception& e) {
             RCLCPP_ERROR(this->get_logger(), "Hand controller init failed: %s", e.what());
         }
-        // ============================================================================
-        
 
         // CV test
         subscription_cv_ = this->create_subscription<geometry_msgs::msg::PointStamped>(
@@ -313,17 +307,14 @@ private:
         current_handle_xyz_.push_back(msg->point.y);
         current_handle_xyz_.push_back(msg->point.z);
         
-        // Выводим информацию
         RCLCPP_INFO(this->get_logger(), 
                    "Updated handle position - x: %.3f, y: %.3f, z: %.3f",
                    current_handle_xyz_[0], current_handle_xyz_[1], current_handle_xyz_[2]);
     }
 
-
     // ====================================================================
     // Публичные методы машины состояний (API)
     // ====================================================================
-
 
     void enable() {
         std::lock_guard<std::mutex> lock(state_mutex_);
@@ -342,7 +333,6 @@ private:
             return;
         }
         enable_control_ = EnableControl::DISABLED;
-        // Останавливаем любую траекторию
         trajectory_manager_.stop();
         state_of_action_ = StateOfAction::HOLDING_POSE;
         RCLCPP_INFO(this->get_logger(), "EnableControl -> DISABLED");
@@ -371,16 +361,30 @@ private:
         RCLCPP_INFO(this->get_logger(), "Trajectory execution started");
     }
 
-    moveit_msgs::msg::RobotTrajectory plan_from_current(
+    // Планирование для правой руки
+    moveit_msgs::msg::RobotTrajectory plan_from_current_right(
         double x, double y, double z,
-        double qx = 0.0, double qy = 0.0, double qz = 0.0, double qw = 1.0) {
-        // Оригинальная функция планирования
+        double roll = 0.0, double pitch = 0.0, double yaw = 0.0) {
         moveit_msgs::msg::RobotTrajectory result;
         auto current_state = motor_state_buffer_.GetData();
         if (!current_state) {
             RCLCPP_ERROR(this->get_logger(), "Cannot plan: no robot state");
             return result;
         }
+        
+        double qx, qy, qz, qw;
+        double cy = cos(yaw * 0.5);
+        double sy = sin(yaw * 0.5);
+        double cp = cos(pitch * 0.5);
+        double sp = sin(pitch * 0.5);
+        double cr = cos(roll * 0.5);
+        double sr = sin(roll * 0.5);
+        
+        qw = cr * cp * cy + sr * sp * sy;
+        qx = sr * cp * cy - cr * sp * sy;
+        qy = cr * sp * cy + sr * cp * sy;
+        qz = cr * cp * sy - sr * sp * cy;
+        
         std::vector<double> start_positions = {
             current_state->q[RIGHT_SHOULDER_PITCH],
             current_state->q[RIGHT_SHOULDER_ROLL],
@@ -438,23 +442,115 @@ private:
             auto response = future.get();
             if (response->motion_plan_response.error_code.val == moveit_msgs::msg::MoveItErrorCodes::SUCCESS) {
                 result = response->motion_plan_response.trajectory;
-                RCLCPP_INFO(this->get_logger(), "Planning successful");
+                RCLCPP_INFO(this->get_logger(), "Planning successful for right arm");
             } else {
-                RCLCPP_ERROR(this->get_logger(), "Planning failed, error code: %d",
+                RCLCPP_ERROR(this->get_logger(), "Planning failed for right arm, error code: %d",
                              response->motion_plan_response.error_code.val);
             }
         } else {
-            RCLCPP_ERROR(this->get_logger(), "Planning service timeout");
+            RCLCPP_ERROR(this->get_logger(), "Planning service timeout for right arm");
         }
         return result;
     }
 
-    moveit_msgs::msg::RobotTrajectory plan_to_joint_angles(
+    // Планирование для левой руки
+    moveit_msgs::msg::RobotTrajectory plan_from_current_left(
+        double x, double y, double z,
+        double roll = 0.0, double pitch = 0.0, double yaw = 0.0) {
+        moveit_msgs::msg::RobotTrajectory result;
+        auto current_state = motor_state_buffer_.GetData();
+        if (!current_state) {
+            RCLCPP_ERROR(this->get_logger(), "Cannot plan for left arm: no robot state");
+            return result;
+        }
+        
+        double qx, qy, qz, qw;
+        double cy = cos(yaw * 0.5);
+        double sy = sin(yaw * 0.5);
+        double cp = cos(pitch * 0.5);
+        double sp = sin(pitch * 0.5);
+        double cr = cos(roll * 0.5);
+        double sr = sin(roll * 0.5);
+        
+        qw = cr * cp * cy + sr * sp * sy;
+        qx = sr * cp * cy - cr * sp * sy;
+        qy = cr * sp * cy + sr * cp * sy;
+        qz = cr * cp * sy - sr * sp * cy;
+        
+        std::vector<double> start_positions = {
+            current_state->q[LEFT_SHOULDER_PITCH],
+            current_state->q[LEFT_SHOULDER_ROLL],
+            current_state->q[LEFT_SHOULDER_YAW],
+            current_state->q[LEFT_ELBOW],
+            current_state->q[LEFT_WRIST_ROLL],
+            current_state->q[LEFT_WRIST_PITCH],
+            current_state->q[LEFT_WRIST_YAW]
+        };
+        auto request = std::make_shared<MotionPlanService::Request>();
+        request->motion_plan_request.group_name = "arm_l";
+        request->motion_plan_request.start_state.is_diff = true;
+        request->motion_plan_request.start_state.joint_state.name = {
+            "left_shoulder_pitch_joint", "left_shoulder_roll_joint", "left_shoulder_yaw_joint",
+            "left_elbow_joint", "left_wrist_roll_joint", "left_wrist_pitch_joint", "left_wrist_yaw_joint"
+        };
+        request->motion_plan_request.start_state.joint_state.position = start_positions;
+        request->motion_plan_request.start_state.joint_state.velocity = std::vector<double>(7, 0.0);
+        request->motion_plan_request.start_state.joint_state.effort = std::vector<double>(7, 0.0);
+
+        moveit_msgs::msg::Constraints goal_constraint;
+        moveit_msgs::msg::PositionConstraint pos_constraint;
+        pos_constraint.header.frame_id = "pelvis";
+        pos_constraint.link_name = "left_hand_middle_ee";
+        shape_msgs::msg::SolidPrimitive sphere;
+        sphere.type = shape_msgs::msg::SolidPrimitive::SPHERE;
+        sphere.dimensions = {0.01};
+        pos_constraint.constraint_region.primitives.push_back(sphere);
+        geometry_msgs::msg::Pose target_pose;
+        target_pose.position.x = x; target_pose.position.y = y; target_pose.position.z = z;
+        target_pose.orientation.x = qx; target_pose.orientation.y = qy;
+        target_pose.orientation.z = qz; target_pose.orientation.w = qw;
+        pos_constraint.constraint_region.primitive_poses.push_back(target_pose);
+        pos_constraint.weight = 1.0;
+        goal_constraint.position_constraints.push_back(pos_constraint);
+
+        moveit_msgs::msg::OrientationConstraint ori_constraint;
+        ori_constraint.header.frame_id = "pelvis";
+        ori_constraint.link_name = "left_hand_middle_ee";
+        ori_constraint.orientation = target_pose.orientation;
+        ori_constraint.absolute_x_axis_tolerance = 0.1;
+        ori_constraint.absolute_y_axis_tolerance = 0.1;
+        ori_constraint.absolute_z_axis_tolerance = 0.1;
+        ori_constraint.weight = 1.0;
+        goal_constraint.orientation_constraints.push_back(ori_constraint);
+
+        request->motion_plan_request.goal_constraints.push_back(goal_constraint);
+        request->motion_plan_request.allowed_planning_time = 5.0;
+        request->motion_plan_request.max_velocity_scaling_factor = 0.5;
+        request->motion_plan_request.max_acceleration_scaling_factor = 0.5;
+
+        auto future = planning_client_->async_send_request(request);
+        auto status = future.wait_for(std::chrono::seconds(10));
+        if (status == std::future_status::ready) {
+            auto response = future.get();
+            if (response->motion_plan_response.error_code.val == moveit_msgs::msg::MoveItErrorCodes::SUCCESS) {
+                result = response->motion_plan_response.trajectory;
+                RCLCPP_INFO(this->get_logger(), "Planning successful for left arm");
+            } else {
+                RCLCPP_ERROR(this->get_logger(), "Planning failed for left arm, error code: %d",
+                             response->motion_plan_response.error_code.val);
+            }
+        } else {
+            RCLCPP_ERROR(this->get_logger(), "Planning service timeout for left arm");
+        }
+        return result;
+    }
+
+    // Планирование в joint angles для правой руки
+    moveit_msgs::msg::RobotTrajectory plan_to_joint_angles_right(
         const std::vector<double>& target_joint_angles) {
-        // Validate input
         if (target_joint_angles.size() != 7) {
             RCLCPP_ERROR(this->get_logger(), 
-                        "Invalid number of joint angles. Expected 7, got %zu",
+                        "Invalid number of joint angles for right arm. Expected 7, got %zu",
                         target_joint_angles.size());
             return moveit_msgs::msg::RobotTrajectory();
         }
@@ -462,11 +558,10 @@ private:
         moveit_msgs::msg::RobotTrajectory result;
         auto current_state = motor_state_buffer_.GetData();
         if (!current_state) {
-            RCLCPP_ERROR(this->get_logger(), "Cannot plan: no robot state");
+            RCLCPP_ERROR(this->get_logger(), "Cannot plan for right arm: no robot state");
             return result;
         }
         
-        // Get current joint positions
         std::vector<double> start_positions = {
             current_state->q[RIGHT_SHOULDER_PITCH],
             current_state->q[RIGHT_SHOULDER_ROLL],
@@ -477,7 +572,6 @@ private:
             current_state->q[RIGHT_WRIST_YAW]
         };
         
-        // Joint names in the same order
         std::vector<std::string> joint_names = {
             "right_shoulder_pitch_joint", "right_shoulder_roll_joint", "right_shoulder_yaw_joint",
             "right_elbow_joint", "right_wrist_roll_joint", "right_wrist_pitch_joint", "right_wrist_yaw_joint"
@@ -491,14 +585,13 @@ private:
         request->motion_plan_request.start_state.joint_state.velocity = std::vector<double>(7, 0.0);
         request->motion_plan_request.start_state.joint_state.effort = std::vector<double>(7, 0.0);
         
-        // Create goal constraints for joint angles
         moveit_msgs::msg::Constraints goal_constraint;
         moveit_msgs::msg::JointConstraint joint_constraint;
         
         for (size_t i = 0; i < joint_names.size(); ++i) {
             joint_constraint.joint_name = joint_names[i];
             joint_constraint.position = target_joint_angles[i];
-            joint_constraint.tolerance_above = 0.01;  // 0.01 rad tolerance
+            joint_constraint.tolerance_above = 0.01;
             joint_constraint.tolerance_below = 0.01;
             joint_constraint.weight = 1.0;
             goal_constraint.joint_constraints.push_back(joint_constraint);
@@ -516,13 +609,89 @@ private:
             auto response = future.get();
             if (response->motion_plan_response.error_code.val == moveit_msgs::msg::MoveItErrorCodes::SUCCESS) {
                 result = response->motion_plan_response.trajectory;
-                RCLCPP_INFO(this->get_logger(), "Joint angle planning successful");
+                RCLCPP_INFO(this->get_logger(), "Joint angle planning successful for right arm");
             } else {
-                RCLCPP_ERROR(this->get_logger(), "Joint angle planning failed, error code: %d",
+                RCLCPP_ERROR(this->get_logger(), "Joint angle planning failed for right arm, error code: %d",
                             response->motion_plan_response.error_code.val);
             }
         } else {
-            RCLCPP_ERROR(this->get_logger(), "Joint angle planning service timeout");
+            RCLCPP_ERROR(this->get_logger(), "Joint angle planning service timeout for right arm");
+        }
+        
+        return result;
+    }
+
+    // Планирование в joint angles для левой руки
+    moveit_msgs::msg::RobotTrajectory plan_to_joint_angles_left(
+        const std::vector<double>& target_joint_angles) {
+        if (target_joint_angles.size() != 7) {
+            RCLCPP_ERROR(this->get_logger(), 
+                        "Invalid number of joint angles for left arm. Expected 7, got %zu",
+                        target_joint_angles.size());
+            return moveit_msgs::msg::RobotTrajectory();
+        }
+        
+        moveit_msgs::msg::RobotTrajectory result;
+        auto current_state = motor_state_buffer_.GetData();
+        if (!current_state) {
+            RCLCPP_ERROR(this->get_logger(), "Cannot plan for left arm: no robot state");
+            return result;
+        }
+        
+        std::vector<double> start_positions = {
+            current_state->q[LEFT_SHOULDER_PITCH],
+            current_state->q[LEFT_SHOULDER_ROLL],
+            current_state->q[LEFT_SHOULDER_YAW],
+            current_state->q[LEFT_ELBOW],
+            current_state->q[LEFT_WRIST_ROLL],
+            current_state->q[LEFT_WRIST_PITCH],
+            current_state->q[LEFT_WRIST_YAW]
+        };
+        
+        std::vector<std::string> joint_names = {
+            "left_shoulder_pitch_joint", "left_shoulder_roll_joint", "left_shoulder_yaw_joint",
+            "left_elbow_joint", "left_wrist_roll_joint", "left_wrist_pitch_joint", "left_wrist_yaw_joint"
+        };
+        
+        auto request = std::make_shared<MotionPlanService::Request>();
+        request->motion_plan_request.group_name = "arm_l";
+        request->motion_plan_request.start_state.is_diff = true;
+        request->motion_plan_request.start_state.joint_state.name = joint_names;
+        request->motion_plan_request.start_state.joint_state.position = start_positions;
+        request->motion_plan_request.start_state.joint_state.velocity = std::vector<double>(7, 0.0);
+        request->motion_plan_request.start_state.joint_state.effort = std::vector<double>(7, 0.0);
+        
+        moveit_msgs::msg::Constraints goal_constraint;
+        moveit_msgs::msg::JointConstraint joint_constraint;
+        
+        for (size_t i = 0; i < joint_names.size(); ++i) {
+            joint_constraint.joint_name = joint_names[i];
+            joint_constraint.position = target_joint_angles[i];
+            joint_constraint.tolerance_above = 0.01;
+            joint_constraint.tolerance_below = 0.01;
+            joint_constraint.weight = 1.0;
+            goal_constraint.joint_constraints.push_back(joint_constraint);
+        }
+        
+        request->motion_plan_request.goal_constraints.push_back(goal_constraint);
+        request->motion_plan_request.allowed_planning_time = 5.0;
+        request->motion_plan_request.max_velocity_scaling_factor = 0.5;
+        request->motion_plan_request.max_acceleration_scaling_factor = 0.5;
+        
+        auto future = planning_client_->async_send_request(request);
+        auto status = future.wait_for(std::chrono::seconds(10));
+        
+        if (status == std::future_status::ready) {
+            auto response = future.get();
+            if (response->motion_plan_response.error_code.val == moveit_msgs::msg::MoveItErrorCodes::SUCCESS) {
+                result = response->motion_plan_response.trajectory;
+                RCLCPP_INFO(this->get_logger(), "Joint angle planning successful for left arm");
+            } else {
+                RCLCPP_ERROR(this->get_logger(), "Joint angle planning failed for left arm, error code: %d",
+                            response->motion_plan_response.error_code.val);
+            }
+        } else {
+            RCLCPP_ERROR(this->get_logger(), "Joint angle planning service timeout for left arm");
         }
         
         return result;
@@ -557,12 +726,10 @@ private:
                 new_point.time_from_start = rclcpp::Duration::from_seconds(current_time);
                 new_point.positions.resize(num_joints);
                 
-                // Линейная интерполяция позиций
                 for (size_t j = 0; j < num_joints; ++j) {
                     new_point.positions[j] = p1.positions[j] + ratio * (p2.positions[j] - p1.positions[j]);
                 }
                 
-                // Интерполяция скоростей (если есть)
                 if (!p1.velocities.empty() && !p2.velocities.empty()) {
                     new_point.velocities.resize(num_joints);
                     for (size_t j = 0; j < num_joints; ++j) {
@@ -574,15 +741,12 @@ private:
             }
         }
     
-        // Добавляем последнюю точку
         interpolated.joint_trajectory.points.push_back(points.back());
         
         return interpolated;
     }
 
-    // Заглушка проверки на самопересечения
     bool check_validity(const MotorState& /*joint_states*/) {
-        // TODO: реализовать проверку коллизий
         return true;
     }
 
@@ -592,16 +756,17 @@ private:
         }
     }
 
-    void move_to_pose(double x, double y, double z,
-    double qx = 0.0, double qy = 0.0, double qz = 0.0, double qw = 1.0){
+    // Движение правой руки в позу
+    void move_to_pose_right(double x, double y, double z,
+        double roll = 0.0, double pitch = 0.0, double yaw = 0.0){
 
-        auto traj_planned = plan_from_current(x, y, z, qx, qy, qz, qw);
+        auto traj_planned = plan_from_current_right(x, y, z, roll, pitch, yaw);
         if (!traj_planned.joint_trajectory.points.empty()) {
             auto traj_smooth = interpolate_trajectory(traj_planned);
             execute_traj(traj_smooth);
             wait_for_trajectory_completion();
         } else {
-            RCLCPP_ERROR(this->get_logger(), "Failed to plan approach");
+            RCLCPP_ERROR(this->get_logger(), "Failed to plan approach for right arm");
             if (current_goal_handle_) {
                 auto result = std::make_shared<MotionPlan::Result>();
                 result->success = false;
@@ -612,15 +777,17 @@ private:
         }
     }
 
-    void move_to_pose_angles(const std::vector<double>& target_joint_angles){
+    // Движение левой руки в позу
+    void move_to_pose_left(double x, double y, double z,
+        double roll = 0.0, double pitch = 0.0, double yaw = 0.0){
 
-        auto traj_planned = plan_to_joint_angles(target_joint_angles);
+        auto traj_planned = plan_from_current_left(x, y, z, roll, pitch, yaw);
         if (!traj_planned.joint_trajectory.points.empty()) {
             auto traj_smooth = interpolate_trajectory(traj_planned);
             execute_traj(traj_smooth);
             wait_for_trajectory_completion();
         } else {
-            RCLCPP_ERROR(this->get_logger(), "Failed to plan approach");
+            RCLCPP_ERROR(this->get_logger(), "Failed to plan approach for left arm");
             if (current_goal_handle_) {
                 auto result = std::make_shared<MotionPlan::Result>();
                 result->success = false;
@@ -629,221 +796,112 @@ private:
             }
             return;
         }
+    }
 
+    // Движение правой руки в joint angles
+    void move_to_pose_angles_right(const std::vector<double>& target_joint_angles){
+
+        auto traj_planned = plan_to_joint_angles_right(target_joint_angles);
+        if (!traj_planned.joint_trajectory.points.empty()) {
+            auto traj_smooth = interpolate_trajectory(traj_planned);
+            execute_traj(traj_smooth);
+            wait_for_trajectory_completion();
+        } else {
+            RCLCPP_ERROR(this->get_logger(), "Failed to plan approach for right arm");
+            if (current_goal_handle_) {
+                auto result = std::make_shared<MotionPlan::Result>();
+                result->success = false;
+                current_goal_handle_->abort(result);
+                current_goal_handle_.reset();
+            }
+            return;
+        }
+    }
+
+    // Движение левой руки в joint angles
+    void move_to_pose_angles_left(const std::vector<double>& target_joint_angles){
+
+        auto traj_planned = plan_to_joint_angles_left(target_joint_angles);
+        if (!traj_planned.joint_trajectory.points.empty()) {
+            auto traj_smooth = interpolate_trajectory(traj_planned);
+            execute_traj(traj_smooth);
+            wait_for_trajectory_completion();
+        } else {
+            RCLCPP_ERROR(this->get_logger(), "Failed to plan approach for left arm");
+            if (current_goal_handle_) {
+                auto result = std::make_shared<MotionPlan::Result>();
+                result->success = false;
+                current_goal_handle_->abort(result);
+                current_goal_handle_.reset();
+            }
+            return;
+        }
     }
 
     void soft_disable(){
         std::vector<double> home_right_vec(HOME_RIGHT.begin(), HOME_RIGHT.end());
-        move_to_pose_angles(home_right_vec);
-
+        std::vector<double> home_left_vec(HOME_LEFT.begin(), HOME_LEFT.end());
+        
+        auto traj_right = plan_to_joint_angles_right(home_right_vec);
+        auto traj_left = plan_to_joint_angles_left(home_left_vec);
+        
+        if (traj_right.joint_trajectory.points.empty() || traj_left.joint_trajectory.points.empty()) {
+            RCLCPP_ERROR(this->get_logger(), "Failed to plan home trajectories for both arms");
+            return;
+        }
+        
+        auto traj_right_smooth = interpolate_trajectory(traj_right);
+        auto traj_left_smooth = interpolate_trajectory(traj_left);
+        
+        moveit_msgs::msg::RobotTrajectory combined_trajectory;
+        combined_trajectory.joint_trajectory.joint_names = {
+            "right_shoulder_pitch_joint", "right_shoulder_roll_joint", "right_shoulder_yaw_joint",
+            "right_elbow_joint", "right_wrist_roll_joint", "right_wrist_pitch_joint", "right_wrist_yaw_joint",
+            "left_shoulder_pitch_joint", "left_shoulder_roll_joint", "left_shoulder_yaw_joint",
+            "left_elbow_joint", "left_wrist_roll_joint", "left_wrist_pitch_joint", "left_wrist_yaw_joint"
+        };
+        
+        size_t num_points = std::max(traj_right_smooth.joint_trajectory.points.size(), 
+                                     traj_left_smooth.joint_trajectory.points.size());
+        
+        for (size_t i = 0; i < num_points; ++i) {
+            trajectory_msgs::msg::JointTrajectoryPoint point;
+            
+            size_t right_idx = std::min(i, traj_right_smooth.joint_trajectory.points.size() - 1);
+            const auto& right_point = traj_right_smooth.joint_trajectory.points[right_idx];
+            
+            size_t left_idx = std::min(i, traj_left_smooth.joint_trajectory.points.size() - 1);
+            const auto& left_point = traj_left_smooth.joint_trajectory.points[left_idx];
+            
+            for (const auto& pos : right_point.positions) {
+                point.positions.push_back(pos);
+            }
+            for (const auto& pos : left_point.positions) {
+                point.positions.push_back(pos);
+            }
+            
+            if (!right_point.velocities.empty() && !left_point.velocities.empty()) {
+                for (const auto& vel : right_point.velocities) {
+                    point.velocities.push_back(vel);
+                }
+                for (const auto& vel : left_point.velocities) {
+                    point.velocities.push_back(vel);
+                }
+            }
+            
+            double right_time = right_point.time_from_start.sec + right_point.time_from_start.nanosec * 1e-9;
+            double left_time = left_point.time_from_start.sec + left_point.time_from_start.nanosec * 1e-9;
+            point.time_from_start = rclcpp::Duration::from_seconds(std::max(right_time, left_time));
+            
+            combined_trajectory.joint_trajectory.points.push_back(point);
+        }
+        
+        execute_traj(combined_trajectory);
+        wait_for_trajectory_completion();
+        
         std::this_thread::sleep_for(std::chrono::milliseconds(500));      
         disable();
         return;
-    }
-
-    // ====================================================================
-    // Command Generator (500 Hz) – формирует MotorCommand на основе состояния
-    // ====================================================================
-    void command_generator_callback() {
-        auto current_state = motor_state_buffer_.GetData();
-        if (!current_state) return;
-
-        auto prev_command = current_command_buffer_.GetData();
-
-        MotorCommand cmd;
-        // Инициализация коэффициентов и feedforward
-        for (int i = 0; i < G1_NUM_MOTOR; ++i) {
-            cmd.kp[i] = Kp[i];
-            cmd.kd[i] = Kd[i];
-            cmd.tau_ff[i] = 0.0f;
-            cmd.dq_target[i] = 0.0f;
-            // q_target пока не заполняем
-        }
-        // По умолчанию q_target 
-        if (!prev_command) {
-            for (int idx : ALL_ARM_MOTORS) {
-                cmd.q_target[idx] = current_state->q[idx];
-            }
-            cmd.q_target[WAIST_YAW] = current_state->q[WAIST_YAW];
-            cmd.q_target[WAIST_ROLL] = current_state->q[WAIST_ROLL];
-            cmd.q_target[WAIST_PITCH] = current_state->q[WAIST_PITCH];
-        }
-        else {
-            for (int idx : ALL_ARM_MOTORS) {
-                cmd.q_target[idx] = prev_command->q_target[idx];
-
-            }
-            // По умолчанию удержание позы талии
-            cmd.q_target[WAIST_YAW] = prev_command->q_target[WAIST_YAW];
-            cmd.q_target[WAIST_ROLL] = prev_command->q_target[WAIST_ROLL];
-            cmd.q_target[WAIST_PITCH] = prev_command->q_target[WAIST_PITCH];
-        }
-
-
-
-
-        EnableControl ec;
-        StateOfAction soa;
-        {
-            std::lock_guard<std::mutex> lock(state_mutex_);
-            ec = enable_control_;
-            soa = state_of_action_;
-        }
-
-        switch (ec) {
-            case EnableControl::EMERGENCY:
-                //Заполняем текущими (не обязательно)
-                for (int idx : ALL_ARM_MOTORS) {
-                    cmd.kp[idx] = 0.0;
-                }
-                break;
-
-            case EnableControl::DISABLED:
-                // Удержание текущей позы (q_target = current)
-                for (int idx : ALL_ARM_MOTORS) {
-                    cmd.q_target[idx] = current_state->q[idx];
-                }
-                break;
-
-            case EnableControl::ENABLED:
-                switch (soa) {
-                    case StateOfAction::HOLDING_POSE:
-
-                        if (!prev_command) {
-                            for (int idx : ALL_ARM_MOTORS) {
-                                cmd.q_target[idx] = current_state->q[idx];
-                            }
-                        }
-                        else {
-                            for (int idx : ALL_ARM_MOTORS) {
-                                cmd.q_target[idx] = prev_command->q_target[idx];
-                            }
-                        }
-                        break;
-
-                    case StateOfAction::EXECUTING_TRAJ:
-                        {
-                            bool active = trajectory_manager_.getCurrentCommand(cmd, *current_state, JOINT_NAME_TO_INDEX);
-                            if (!active) {
-                                // Траектория завершена – переключаемся в HOLDING_POSE
-                                // TODO отщелкивание автомата убрать. Улучшить логику
-                                std::lock_guard<std::mutex> lock(state_mutex_);
-                                if (state_of_action_ == StateOfAction::EXECUTING_TRAJ) {
-                                    state_of_action_ = StateOfAction::HOLDING_POSE;
-                                    RCLCPP_INFO(this->get_logger(), "Trajectory finished, -> HOLDING_POSE");
-                                    // TODO перенести в конец execute, это неверно
-                                    if (current_goal_handle_ && !current_goal_handle_->is_canceling()) {
-                                        auto result = std::make_shared<MotionPlan::Result>();
-                                        result->success = true;
-                                        current_goal_handle_->succeed(result);
-                                        current_goal_handle_.reset();
-                                    }
-                                }
-                                
-                                if (!prev_command) {
-                                    for (int idx : ALL_ARM_MOTORS) {
-                                        cmd.q_target[idx] = current_state->q[idx];
-                                    }
-                                }
-                                else {
-                                    for (int idx : ALL_ARM_MOTORS) {
-                                        cmd.q_target[idx] = prev_command->q_target[idx];
-                                    }
-                                }
-
-
-                            }
-                        }
-                        break;
-
-                    case StateOfAction::NEURO_DRIVEN:
-                        // Заглушка нейросети
-                        // TODO: обсчёт нейронкой, проверка валидности, при невалидности -> emergency()
-                        // Пока просто удерживаем позу
-                        for (int idx : ALL_ARM_MOTORS) {
-                            cmd.q_target[idx] = current_state->q[idx];
-                        }
-                        break;
-                }
-                break;
-        }
-
-        // Отправляем сгенерированную команду в буфер текущих команд
-        current_command_buffer_.SetData(cmd);
-    }
-
-    // ====================================================================
-    // Commander (500 Hz) – формирует LowCmd и публикует в /arm_sdk
-    // ====================================================================
-    void commander_callback() {
-        unitree_hg::msg::LowCmd low_cmd;
-        low_cmd.mode_pr = static_cast<uint8_t>(Mode::PR);
-        low_cmd.mode_machine = 0;
-
-        // По умолчанию все моторы в mode=0 (демпфирование)
-        for (int i = 0; i < G1_NUM_MOTOR; ++i) {
-            low_cmd.motor_cmd[i].mode = 0;
-            low_cmd.motor_cmd[i].tau = 0.0;
-            low_cmd.motor_cmd[i].q = 0.0;
-            low_cmd.motor_cmd[i].dq = 0.0;
-            low_cmd.motor_cmd[i].kp = 0.0;
-            low_cmd.motor_cmd[i].kd = 0.0;
-        }
-
-        EnableControl ec;
-        {
-            std::lock_guard<std::mutex> lock(state_mutex_);
-            ec = enable_control_;
-        }
-
-
-        // TODO переместить логику в coomand generator
-        // Специальная обработка EMERGENCY: все моторы mode=0, NOT_USED_JOINT q = 1
-        if (ec == EnableControl::EMERGENCY) {
-            low_cmd.motor_cmd[NOT_USED_JOINT].mode = 1;
-            low_cmd.motor_cmd[NOT_USED_JOINT].q = 1.0f; // Server controls the joints, NOT robots_alghos. q=0 would make its hands shoot into default walking pose of LocoClient
-            get_crc(low_cmd);
-            lowcmd_publisher_->publish(low_cmd);
-            return;
-        }
-
-        // Включаем управление для waist и рук (mode=1)
-        for (int idx : {WAIST_YAW, WAIST_ROLL, WAIST_PITCH}) {
-            low_cmd.motor_cmd[idx].mode = 1;
-        }
-        for (int idx : ALL_ARM_MOTORS) {
-            low_cmd.motor_cmd[idx].mode = 1;
-        }
-
-        // Устанавливаем NOT_USED_JOINT в зависимости от ENABLED/DISABLED
-        low_cmd.motor_cmd[NOT_USED_JOINT].mode = 1;
-        low_cmd.motor_cmd[NOT_USED_JOINT].q = (ec == EnableControl::ENABLED) ? 1.0f : 0.0f;
-
-        // Берем последнюю команду из буфера (сгенерированную CommandGenerator)
-        auto cmd = current_command_buffer_.GetData();
-        if (cmd) {
-            for (int idx : ALL_ARM_MOTORS) {
-                low_cmd.motor_cmd[idx].tau = cmd->tau_ff[idx];
-                low_cmd.motor_cmd[idx].q   = cmd->q_target[idx];
-                low_cmd.motor_cmd[idx].dq  = cmd->dq_target[idx];
-                low_cmd.motor_cmd[idx].kp  = cmd->kp[idx];
-                low_cmd.motor_cmd[idx].kd  = cmd->kd[idx];
-            }
-            // Также для waist (по желанию можно брать из команды, пока удержание)
-            low_cmd.motor_cmd[WAIST_YAW].q   = cmd->q_target[WAIST_YAW];
-            low_cmd.motor_cmd[WAIST_ROLL].q  = cmd->q_target[WAIST_ROLL];
-            low_cmd.motor_cmd[WAIST_PITCH].q = cmd->q_target[WAIST_PITCH];
-            // Коэффициенты для waist
-            low_cmd.motor_cmd[WAIST_YAW].kp   = Kp[WAIST_YAW];
-            low_cmd.motor_cmd[WAIST_YAW].kd   = Kd[WAIST_YAW];
-            low_cmd.motor_cmd[WAIST_ROLL].kp  = Kp[WAIST_ROLL];
-            low_cmd.motor_cmd[WAIST_ROLL].kd  = Kd[WAIST_ROLL];
-            low_cmd.motor_cmd[WAIST_PITCH].kp = Kp[WAIST_PITCH];
-            low_cmd.motor_cmd[WAIST_PITCH].kd = Kd[WAIST_PITCH];
-        }
-
-        get_crc(low_cmd);
-        lowcmd_publisher_->publish(low_cmd);
     }
 
     // ====================================================================
@@ -865,20 +923,16 @@ private:
             std::string side_str = (side == dftp_hand::HandSide::LEFT) ? "LEFT" : "RIGHT";
             RCLCPP_INFO(this->get_logger(), "Executing command on %s hand...", side_str.c_str());
             
-            // Библиотека dftp_hand_control блокирует поток до получения ответа от драйвера
             hand_controller_->executeGesture(side, gesture);
             
-            // Дополнительная синхронизация: ждём стабилизации пальцев перед следующей командой руки
             std::this_thread::sleep_for(std::chrono::milliseconds(stabilization_ms));
             return true;
         } catch (const std::exception& e) {
             RCLCPP_ERROR(this->get_logger(), "Gesture execution failed: %s", e.what());
-            // emergency();
             return false;
         }
     }
 
-    // Для управления обеими кистями одновременно
     bool execute_parallel_gestures(
         dftp_hand::HandSide left_side, dftp_hand::Gesture left_gesture,
         dftp_hand::HandSide right_side, dftp_hand::Gesture right_gesture,
@@ -896,6 +950,211 @@ private:
             emergency();
             return false;
         }
+    }
+
+    // ====================================================================
+    // Command Generator (500 Hz) – формирует MotorCommand на основе состояния
+    // ====================================================================
+    void command_generator_callback() {
+        auto current_state = motor_state_buffer_.GetData();
+        if (!current_state) return;
+
+        auto prev_command = current_command_buffer_.GetData();
+
+        MotorCommand cmd;
+        for (int i = 0; i < G1_NUM_MOTOR; ++i) {
+            cmd.kp[i] = Kp[i];
+            cmd.kd[i] = Kd[i];
+            cmd.tau_ff[i] = 0.0f;
+            cmd.dq_target[i] = 0.0f;
+        }
+        
+        if (!prev_command) {
+            for (int idx : ALL_ARM_MOTORS) {
+                cmd.q_target[idx] = current_state->q[idx];
+            }
+            cmd.q_target[WAIST_YAW] = current_state->q[WAIST_YAW];
+            cmd.q_target[WAIST_ROLL] = current_state->q[WAIST_ROLL];
+            cmd.q_target[WAIST_PITCH] = current_state->q[WAIST_PITCH];
+        }
+        else {
+            for (int idx : ALL_ARM_MOTORS) {
+                cmd.q_target[idx] = prev_command->q_target[idx];
+            }
+            cmd.q_target[WAIST_YAW] = prev_command->q_target[WAIST_YAW];
+            cmd.q_target[WAIST_ROLL] = prev_command->q_target[WAIST_ROLL];
+            cmd.q_target[WAIST_PITCH] = prev_command->q_target[WAIST_PITCH];
+        }
+
+        EnableControl ec;
+        StateOfAction soa;
+        {
+            std::lock_guard<std::mutex> lock(state_mutex_);
+            ec = enable_control_;
+            soa = state_of_action_;
+        }
+
+        switch (ec) {
+            case EnableControl::EMERGENCY:
+                for (int idx : ALL_ARM_MOTORS) {
+                    cmd.kp[idx] = 0.0;
+                }
+                break;
+
+            case EnableControl::DISABLED:
+                for (int idx : ALL_ARM_MOTORS) {
+                    cmd.q_target[idx] = current_state->q[idx];
+                }
+                break;
+
+            case EnableControl::ENABLED:
+                switch (soa) {
+                    case StateOfAction::HOLDING_POSE:
+                        if (prev_command) {
+                            for (int idx : ALL_ARM_MOTORS) {
+                                cmd.q_target[idx] = prev_command->q_target[idx];
+                            }
+                        } else {
+                            for (int idx : ALL_ARM_MOTORS) {
+                                cmd.q_target[idx] = current_state->q[idx];
+                            }
+                        }
+                        break;
+
+                    case StateOfAction::EXECUTING_TRAJ:
+                        {
+                            if (!prev_command) {
+                                MotorCommand temp_cmd;
+                                for (int idx : ALL_ARM_MOTORS) {
+                                    temp_cmd.q_target[idx] = current_state->q[idx];
+                                    temp_cmd.dq_target[idx] = 0.0f;
+                                }
+                                bool active = trajectory_manager_.getCurrentCommand(cmd, *current_state, temp_cmd, JOINT_NAME_TO_INDEX);
+                                if (!active) {
+                                    std::lock_guard<std::mutex> lock(state_mutex_);
+                                    if (state_of_action_ == StateOfAction::EXECUTING_TRAJ) {
+                                        state_of_action_ = StateOfAction::HOLDING_POSE;
+                                        RCLCPP_INFO(this->get_logger(), "Trajectory finished, -> HOLDING_POSE");
+                                        if (current_goal_handle_ && !current_goal_handle_->is_canceling()) {
+                                            auto result = std::make_shared<MotionPlan::Result>();
+                                            result->success = true;
+                                            current_goal_handle_->succeed(result);
+                                            current_goal_handle_.reset();
+                                        }
+                                    }
+                                    if (prev_command) {
+                                        for (int idx : ALL_ARM_MOTORS) {
+                                            cmd.q_target[idx] = prev_command->q_target[idx];
+                                        }
+                                    } else {
+                                        for (int idx : ALL_ARM_MOTORS) {
+                                            cmd.q_target[idx] = current_state->q[idx];
+                                        }
+                                    }
+                                }
+                            } else {
+                                bool active = trajectory_manager_.getCurrentCommand(cmd, *current_state, *prev_command, JOINT_NAME_TO_INDEX);
+                                if (!active) {
+                                    std::lock_guard<std::mutex> lock(state_mutex_);
+                                    if (state_of_action_ == StateOfAction::EXECUTING_TRAJ) {
+                                        state_of_action_ = StateOfAction::HOLDING_POSE;
+                                        RCLCPP_INFO(this->get_logger(), "Trajectory finished, -> HOLDING_POSE");
+                                        if (current_goal_handle_ && !current_goal_handle_->is_canceling()) {
+                                            auto result = std::make_shared<MotionPlan::Result>();
+                                            result->success = true;
+                                            current_goal_handle_->succeed(result);
+                                            current_goal_handle_.reset();
+                                        }
+                                    }
+                                    for (int idx : ALL_ARM_MOTORS) {
+                                        cmd.q_target[idx] = prev_command->q_target[idx];
+                                    }
+                                }
+                            }
+                        }
+                        break;
+
+                    case StateOfAction::NEURO_DRIVEN:
+                        if (prev_command) {
+                            for (int idx : ALL_ARM_MOTORS) {
+                                cmd.q_target[idx] = prev_command->q_target[idx];
+                            }
+                        } else {
+                            for (int idx : ALL_ARM_MOTORS) {
+                                cmd.q_target[idx] = current_state->q[idx];
+                            }
+                        }
+                        break;
+                }
+                break;
+        }
+
+        current_command_buffer_.SetData(cmd);
+    }
+
+    // ====================================================================
+    // Commander (500 Hz) – формирует LowCmd и публикует в /arm_sdk
+    // ====================================================================
+    void commander_callback() {
+        unitree_hg::msg::LowCmd low_cmd;
+        low_cmd.mode_pr = static_cast<uint8_t>(Mode::PR);
+        low_cmd.mode_machine = 0;
+
+        for (int i = 0; i < G1_NUM_MOTOR; ++i) {
+            low_cmd.motor_cmd[i].mode = 0;
+            low_cmd.motor_cmd[i].tau = 0.0;
+            low_cmd.motor_cmd[i].q = 0.0;
+            low_cmd.motor_cmd[i].dq = 0.0;
+            low_cmd.motor_cmd[i].kp = 0.0;
+            low_cmd.motor_cmd[i].kd = 0.0;
+        }
+
+        EnableControl ec;
+        {
+            std::lock_guard<std::mutex> lock(state_mutex_);
+            ec = enable_control_;
+        }
+
+        if (ec == EnableControl::EMERGENCY) {
+            low_cmd.motor_cmd[NOT_USED_JOINT].mode = 1;
+            low_cmd.motor_cmd[NOT_USED_JOINT].q = 1.0f;
+            get_crc(low_cmd);
+            lowcmd_publisher_->publish(low_cmd);
+            return;
+        }
+
+        for (int idx : {WAIST_YAW, WAIST_ROLL, WAIST_PITCH}) {
+            low_cmd.motor_cmd[idx].mode = 1;
+        }
+        for (int idx : ALL_ARM_MOTORS) {
+            low_cmd.motor_cmd[idx].mode = 1;
+        }
+
+        low_cmd.motor_cmd[NOT_USED_JOINT].mode = 1;
+        low_cmd.motor_cmd[NOT_USED_JOINT].q = (ec == EnableControl::ENABLED) ? 1.0f : 0.0f;
+
+        auto cmd = current_command_buffer_.GetData();
+        if (cmd) {
+            for (int idx : ALL_ARM_MOTORS) {
+                low_cmd.motor_cmd[idx].tau = cmd->tau_ff[idx];
+                low_cmd.motor_cmd[idx].q   = cmd->q_target[idx];
+                low_cmd.motor_cmd[idx].dq  = cmd->dq_target[idx];
+                low_cmd.motor_cmd[idx].kp  = cmd->kp[idx];
+                low_cmd.motor_cmd[idx].kd  = cmd->kd[idx];
+            }
+            low_cmd.motor_cmd[WAIST_YAW].q   = cmd->q_target[WAIST_YAW];
+            low_cmd.motor_cmd[WAIST_ROLL].q  = cmd->q_target[WAIST_ROLL];
+            low_cmd.motor_cmd[WAIST_PITCH].q = cmd->q_target[WAIST_PITCH];
+            low_cmd.motor_cmd[WAIST_YAW].kp   = Kp[WAIST_YAW];
+            low_cmd.motor_cmd[WAIST_YAW].kd   = Kd[WAIST_YAW];
+            low_cmd.motor_cmd[WAIST_ROLL].kp  = Kp[WAIST_ROLL];
+            low_cmd.motor_cmd[WAIST_ROLL].kd  = Kd[WAIST_ROLL];
+            low_cmd.motor_cmd[WAIST_PITCH].kp = Kp[WAIST_PITCH];
+            low_cmd.motor_cmd[WAIST_PITCH].kd = Kd[WAIST_PITCH];
+        }
+
+        get_crc(low_cmd);
+        lowcmd_publisher_->publish(low_cmd);
     }
 
     // ====================================================================
@@ -917,8 +1176,6 @@ private:
         const rclcpp_action::GoalUUID& uuid,
         std::shared_ptr<const MotionPlan::Goal> goal) {
         (void)uuid;
-        // Поддерживаем коды: 0 – button press, 1 – custom traj (заглушка),
-        // 2 – enable, 3 – disable, 4 – emergency, 5 – move to pose (заглушка)
         if (goal->action_code >= 0 && goal->action_code <= 5) {
             return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
         }
@@ -943,47 +1200,48 @@ private:
         const auto goal = goal_handle->get_goal();
 
         switch (goal->action_code) {
-            case 0:  // Button press sequence
+            case 0:
                 std::thread([this]() { execute_button_press(); }).detach();
                 break;
         }
     }
 
-    // Пример высокоуровневого действия (button press)
     void execute_button_press() {
         RCLCPP_INFO(this->get_logger(), "Starting button press sequence");
 
         // Включаем управление руками
         enable();
-        std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+	
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));      
         
-        move_to_pose(0.33, -0.31, 0.4);
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000)); 
+        move_to_pose_left(current_handle_xyz_[0] + 0.02, current_handle_xyz_[1] + 0.15, current_handle_xyz_[2] + 0.08);
 
-        execute_hand_gesture(dftp_hand::HandSide::RIGHT, dftp_hand::Gesture::POINT_BUTTON, 800);
-
-        move_to_pose(0.44, -0.24, 0.4);
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-
-        execute_hand_gesture(dftp_hand::HandSide::RIGHT, dftp_hand::Gesture::FREE_WRIST, 800);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         
-        move_to_pose(0.33, -0.31, 0.4);
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000));   
-
-        // move_to_pose(current_handle_xyz_[0] - 0.1, current_handle_xyz_[1], current_handle_xyz_[2]);
-
-        // std::this_thread::sleep_for(std::chrono::milliseconds(5000));      
-
-        // Планируем траекторию и двигаем руку в точку
-        // move_to_pose(current_handle_xyz_[0], current_handle_xyz_[1], current_handle_xyz_[2]);
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+        execute_hand_gesture(
+            dftp_hand::HandSide::LEFT, 
+            dftp_hand::Gesture::PREP_PREP_GRASP, 
+            800);
+        
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        
+        move_to_pose_left(current_handle_xyz_[0] + 0.02, current_handle_xyz_[1] + 0.03, current_handle_xyz_[2] + 0.08);
+        
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        
+        execute_hand_gesture(
+            dftp_hand::HandSide::LEFT, 
+            dftp_hand::Gesture::GRASP_DOOR_HANDLE, 
+            800);
+            
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        
+        move_to_pose_left(current_handle_xyz_[0] - 0.1, current_handle_xyz_[1], current_handle_xyz_[2] + 0.05);
+        
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
         soft_disable();
-
-        //std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     }
-
 
     // ====================================================================
     // Члены класса
@@ -999,14 +1257,13 @@ private:
     rclcpp::TimerBase::SharedPtr command_generator_timer_;
     rclcpp::TimerBase::SharedPtr commander_timer_;
 
-    DataBuffer<MotorCommand> current_command_buffer_;   // Буфер текущих команд
+    DataBuffer<MotorCommand> current_command_buffer_;
     DataBuffer<MotorState> motor_state_buffer_;
 
     std::vector<double> current_handle_xyz_;
-    TrajectoryManager trajectory_manager_;              // Буфер траекторий
+    TrajectoryManager trajectory_manager_;
 
-    std::unique_ptr<dftp_hand::HandController> hand_controller_; 
-    // Прокси-узел для кистей (чтобы не уничтожился после конструктора)
+    std::unique_ptr<dftp_hand::HandController> hand_controller_;
     rclcpp::Node::SharedPtr hand_proxy_node_;
 
     std::mutex state_mutex_;
@@ -1038,6 +1295,3 @@ int main(int argc, char ** argv) {
     rclcpp::shutdown();
     return 0;
 }
-
-
-

@@ -17,14 +17,13 @@ find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(urdf REQUIRED)
-find_package(robot_state_publisher REQUIRED)  # Добавьте если используете
 
 # Для launch_ros используем ament_cmake, так как это Python-пакет
 # НЕ ИСПОЛЬЗУЙТЕ find_package для launch_ros!
 
 # Установка ресурсов (URDF и мешей)
 install(
-  DIRECTORY urdf launch rviz config
+  DIRECTORY urdf launch
   DESTINATION share/${PROJECT_NAME}
 )
 

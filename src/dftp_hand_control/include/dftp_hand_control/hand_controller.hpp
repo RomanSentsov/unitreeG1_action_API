@@ -27,7 +27,8 @@ enum class Gesture {
     GRASP_DOOR_HANDLE,    // Сжатие ручки
     GRASP_PASS_PREP,      // Подготовка к пропуску
     GRASP_PASS,            // Сжатие пропуска
-    FUCK_YOU
+    FUCK_YOU,
+    PREP_PREP_GRASP
 };
 
 // Структура данных жеста (объявлена здесь один раз)

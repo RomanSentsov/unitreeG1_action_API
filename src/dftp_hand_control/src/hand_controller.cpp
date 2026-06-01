@@ -51,6 +51,10 @@ GestureData HandController::getGestureData(Gesture gesture) {
             positions = {2000, 2000, 0, 2000, 0, 0}; 
             forces = {600, 600, 600, 600, 600, 600};
             break;
+        case Gesture::PREP_PREP_GRASP:
+            positions = {0, 0, 0, 0, 0, 2000}; 
+            forces = {600, 600, 600, 600, 600, 600};
+            break;
         case Gesture::FREE_WRIST:
         default:
             positions = {0, 0, 0, 0, 0, 0}; 
