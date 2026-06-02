@@ -17,6 +17,7 @@
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "moveit_msgs/msg/robot_trajectory.hpp"
 #include "moveit_msgs/srv/get_motion_plan.hpp"
+#include "moveit_msgs/srv/get_cartesian_trajectory.hpp"
 #include "trajectory_msgs/msg/joint_trajectory_point.hpp"
 #include "unitree_hg/msg/low_cmd.hpp"
 #include "unitree_hg/msg/low_state.hpp"
@@ -72,11 +73,11 @@ const std::vector<int> ALL_ARM_MOTORS = {
 // TODO: Настроить
 const std::array<float, G1_NUM_MOTOR> Kp = {
     60, 60, 60, 100, 40, 40, 60, 60, 60, 100, 40, 40, 400, 240, 240,
-    90, 90, 80, 80, 40, 40, 40, 90, 90, 80, 80, 40, 40, 40
+    90, 90, 80, 80, 40, 40, 40, 90, 90, 80, 80, 40, 40, 40 //L arm and R arm, shoulder to wrist
 };
 const std::array<float, G1_NUM_MOTOR> Kd = {
     1, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 1.5, 1.5, 1.5
+    2, 2, 2, 2, 1.5, 1.5, 1.5, 2, 2, 2, 2, 1.5, 1.5, 1.5 //L arm and R arm, shoulder to wrist
 };
 
 // Позиции для хоуминга рук soft_disable (правая рука)
@@ -259,6 +260,9 @@ public:
         // MoveIt client
         planning_client_ = this->create_client<MotionPlanService>("/plan_kinematic_path");
 
+        cartesian_planning_client_ = this->create_client<moveit_msgs::srv::GetCartesianTrajectory>(
+            "/compute_cartesian_trajectory");
+
         // LowState subscriber
         lowstate_subscriber_ = this->create_subscription<unitree_hg::msg::LowState>(
             "lowstate", 10, std::bind(&ManipulationActionServer::low_state_callback, this, _1));
@@ -394,6 +398,78 @@ private:
             current_state->q[RIGHT_WRIST_PITCH],
             current_state->q[RIGHT_WRIST_YAW]
         };
+        
+        // Сначала пробуем спланировать декартову траекторию
+        RCLCPP_INFO(this->get_logger(), "Attempting Cartesian path planning for right arm");
+        
+        if (cartesian_planning_client_->wait_for_service(std::chrono::seconds(1))) {
+            // Создаём запрос для Cartesian пути
+            moveit_msgs::msg::CartesianTrajectoryRequest cartesian_request;
+            cartesian_request.header.frame_id = "pelvis";
+            cartesian_request.group_name = "arm_r";
+            cartesian_request.link_name = "right_palm_ee";
+            cartesian_request.max_step = 0.01;  // Максимальный шаг в метрах
+            cartesian_request.jump_threshold = 0.0;  // Порог для обнаружения скачков
+            cartesian_request.avoid_collisions = true;  // Проверять коллизии
+            
+            // Start state
+            cartesian_request.start_state.is_diff = true;
+            cartesian_request.start_state.joint_state.name = {
+                "right_shoulder_pitch_joint", "right_shoulder_roll_joint", "right_shoulder_yaw_joint",
+                "right_elbow_joint", "right_wrist_roll_joint", "right_wrist_pitch_joint", "right_wrist_yaw_joint"
+            };
+            cartesian_request.start_state.joint_state.position = start_positions;
+            cartesian_request.start_state.joint_state.velocity = std::vector<double>(7, 0.0);
+            cartesian_request.start_state.joint_state.effort = std::vector<double>(7, 0.0);
+            
+            // Добавляем waypoints (только целевая точка, начальная будет взята из текущего состояния)
+            geometry_msgs::msg::Pose target_pose;
+            target_pose.position.x = x;
+            target_pose.position.y = y;
+            target_pose.position.z = z;
+            target_pose.orientation.x = qx;
+            target_pose.orientation.y = qy;
+            target_pose.orientation.z = qz;
+            target_pose.orientation.w = qw;
+            cartesian_request.waypoints.push_back(target_pose);
+            
+            // Добавляем ориентационные ограничения
+            moveit_msgs::msg::OrientationConstraint cartesian_ori_constraint;
+            cartesian_ori_constraint.header.frame_id = "pelvis";
+            cartesian_ori_constraint.link_name = "right_palm_ee";
+            cartesian_ori_constraint.orientation = target_pose.orientation;
+            cartesian_ori_constraint.absolute_x_axis_tolerance = 0.1;
+            cartesian_ori_constraint.absolute_y_axis_tolerance = 0.1;
+            cartesian_ori_constraint.absolute_z_axis_tolerance = 0.1;
+            cartesian_ori_constraint.weight = 1.0;
+            cartesian_request.orientation_constraints.push_back(cartesian_ori_constraint);
+            
+            // Отправляем запрос на Cartesian планирование
+            auto cartesian_future = cartesian_planning_client_->async_send_request(
+                std::make_shared<moveit_msgs::srv::GetCartesianTrajectory::Request>(cartesian_request));
+            
+            auto cartesian_status = cartesian_future.wait_for(std::chrono::seconds(5));
+            if (cartesian_status == std::future_status::ready) {
+                auto cartesian_response = cartesian_future.get();
+                if (cartesian_response->error_code.val == moveit_msgs::msg::MoveItErrorCodes::SUCCESS) {
+                    result = cartesian_response->trajectory;
+                    RCLCPP_INFO(this->get_logger(), "Cartesian path planning successful for right arm. Trajectory has %zu points",
+                                 result.joint_trajectory.points.size());
+                    return result;
+                } else {
+                    RCLCPP_WARN(this->get_logger(), "Cartesian path planning failed with error code: %d, falling back to joint space planning",
+                                 cartesian_response->error_code.val);
+                }
+            } else {
+                RCLCPP_WARN(this->get_logger(), "Cartesian path planning timeout, falling back to joint space planning");
+            }
+        } else {
+            RCLCPP_WARN(this->get_logger(), "Cartesian planning service not available, falling back to joint space planning");
+        }
+        
+        // Fallback: оригинальный метод планирования в joint space
+        RCLCPP_INFO(this->get_logger(), "Falling back to joint space planning for right arm");
+        
         auto request = std::make_shared<MotionPlanService::Request>();
         request->motion_plan_request.group_name = "arm_r";
         request->motion_plan_request.start_state.is_diff = true;
@@ -408,7 +484,7 @@ private:
         moveit_msgs::msg::Constraints goal_constraint;
         moveit_msgs::msg::PositionConstraint pos_constraint;
         pos_constraint.header.frame_id = "pelvis";
-        pos_constraint.link_name = "right_hand_middle_ee";
+        pos_constraint.link_name = "right_palm_ee";
         shape_msgs::msg::SolidPrimitive sphere;
         sphere.type = shape_msgs::msg::SolidPrimitive::SPHERE;
         sphere.dimensions = {0.01};
@@ -423,7 +499,7 @@ private:
 
         moveit_msgs::msg::OrientationConstraint ori_constraint;
         ori_constraint.header.frame_id = "pelvis";
-        ori_constraint.link_name = "right_hand_middle_ee";
+        ori_constraint.link_name = "right_palm_ee";
         ori_constraint.orientation = target_pose.orientation;
         ori_constraint.absolute_x_axis_tolerance = 0.1;
         ori_constraint.absolute_y_axis_tolerance = 0.1;
@@ -442,13 +518,13 @@ private:
             auto response = future.get();
             if (response->motion_plan_response.error_code.val == moveit_msgs::msg::MoveItErrorCodes::SUCCESS) {
                 result = response->motion_plan_response.trajectory;
-                RCLCPP_INFO(this->get_logger(), "Planning successful for right arm");
+                RCLCPP_INFO(this->get_logger(), "Joint space planning successful for right arm");
             } else {
-                RCLCPP_ERROR(this->get_logger(), "Planning failed for right arm, error code: %d",
+                RCLCPP_ERROR(this->get_logger(), "Joint space planning failed for right arm, error code: %d",
                              response->motion_plan_response.error_code.val);
             }
         } else {
-            RCLCPP_ERROR(this->get_logger(), "Planning service timeout for right arm");
+            RCLCPP_ERROR(this->get_logger(), "Joint space planning service timeout for right arm");
         }
         return result;
     }
@@ -460,7 +536,7 @@ private:
         moveit_msgs::msg::RobotTrajectory result;
         auto current_state = motor_state_buffer_.GetData();
         if (!current_state) {
-            RCLCPP_ERROR(this->get_logger(), "Cannot plan for left arm: no robot state");
+            RCLCPP_ERROR(this->get_logger(), "Cannot plan: no robot state");
             return result;
         }
         
@@ -486,6 +562,77 @@ private:
             current_state->q[LEFT_WRIST_PITCH],
             current_state->q[LEFT_WRIST_YAW]
         };
+        
+        // Сначала пробуем спланировать декартову траекторию
+        RCLCPP_INFO(this->get_logger(), "Attempting Cartesian path planning for left arm");
+        
+        if (cartesian_planning_client_->wait_for_service(std::chrono::seconds(1))) {
+            // Создаём запрос для Cartesian пути
+            moveit_msgs::msg::CartesianTrajectoryRequest cartesian_request;
+            cartesian_request.header.frame_id = "pelvis";
+            cartesian_request.group_name = "arm_l";
+            cartesian_request.link_name = "left_palm_ee";
+            cartesian_request.max_step = 0.01;  // Максимальный шаг в метрах
+            cartesian_request.jump_threshold = 0.0;  // Порог для обнаружения скачков
+            cartesian_request.avoid_collisions = true;  // Проверять коллизии
+            
+            cartesian_request.start_state.is_diff = true;
+            cartesian_request.start_state.joint_state.name = {
+            "left_shoulder_pitch_joint", "left_shoulder_roll_joint", "left_shoulder_yaw_joint",
+            "left_elbow_joint", "left_wrist_roll_joint", "left_wrist_pitch_joint", "left_wrist_yaw_joint"
+            };
+            cartesian_request.start_state.joint_state.position = start_positions;
+            cartesian_request.start_state.joint_state.velocity = std::vector<double>(7, 0.0);
+            cartesian_request.start_state.joint_state.effort = std::vector<double>(7, 0.0);
+
+            // Добавляем waypoints (только целевая точка, начальная будет взята из текущего состояния)
+            geometry_msgs::msg::Pose target_pose;
+            target_pose.position.x = x;
+            target_pose.position.y = y;
+            target_pose.position.z = z;
+            target_pose.orientation.x = qx;
+            target_pose.orientation.y = qy;
+            target_pose.orientation.z = qz;
+            target_pose.orientation.w = qw;
+            cartesian_request.waypoints.push_back(target_pose);
+            
+            // Добавляем ориентационные ограничения
+            moveit_msgs::msg::OrientationConstraint cartesian_ori_constraint;
+            cartesian_ori_constraint.header.frame_id = "pelvis";
+            cartesian_ori_constraint.link_name = "left_palm_ee";
+            cartesian_ori_constraint.orientation = target_pose.orientation;
+            cartesian_ori_constraint.absolute_x_axis_tolerance = 0.1;
+            cartesian_ori_constraint.absolute_y_axis_tolerance = 0.1;
+            cartesian_ori_constraint.absolute_z_axis_tolerance = 0.1;
+            cartesian_ori_constraint.weight = 1.0;
+            cartesian_request.orientation_constraints.push_back(cartesian_ori_constraint);
+            
+            // Отправляем запрос на Cartesian планирование
+            auto cartesian_future = cartesian_planning_client_->async_send_request(
+                std::make_shared<moveit_msgs::srv::GetCartesianTrajectory::Request>(cartesian_request));
+            
+            auto cartesian_status = cartesian_future.wait_for(std::chrono::seconds(5));
+            if (cartesian_status == std::future_status::ready) {
+                auto cartesian_response = cartesian_future.get();
+                if (cartesian_response->error_code.val == moveit_msgs::msg::MoveItErrorCodes::SUCCESS) {
+                    result = cartesian_response->trajectory;
+                    RCLCPP_INFO(this->get_logger(), "Cartesian path planning successful for left arm. Trajectory has %zu points",
+                                 result.joint_trajectory.points.size());
+                    return result;
+                } else {
+                    RCLCPP_WARN(this->get_logger(), "Cartesian path planning failed with error code: %d, falling back to joint space planning",
+                                 cartesian_response->error_code.val);
+                }
+            } else {
+                RCLCPP_WARN(this->get_logger(), "Cartesian path planning timeout, falling back to joint space planning");
+            }
+        } else {
+            RCLCPP_WARN(this->get_logger(), "Cartesian planning service not available, falling back to joint space planning");
+        }
+        
+        // Fallback: оригинальный метод планирования в joint space
+        RCLCPP_INFO(this->get_logger(), "Falling back to joint space planning for left arm");
+        
         auto request = std::make_shared<MotionPlanService::Request>();
         request->motion_plan_request.group_name = "arm_l";
         request->motion_plan_request.start_state.is_diff = true;
@@ -500,7 +647,7 @@ private:
         moveit_msgs::msg::Constraints goal_constraint;
         moveit_msgs::msg::PositionConstraint pos_constraint;
         pos_constraint.header.frame_id = "pelvis";
-        pos_constraint.link_name = "left_hand_middle_ee";
+        pos_constraint.link_name = "left_palm_ee";
         shape_msgs::msg::SolidPrimitive sphere;
         sphere.type = shape_msgs::msg::SolidPrimitive::SPHERE;
         sphere.dimensions = {0.01};
@@ -515,7 +662,7 @@ private:
 
         moveit_msgs::msg::OrientationConstraint ori_constraint;
         ori_constraint.header.frame_id = "pelvis";
-        ori_constraint.link_name = "left_hand_middle_ee";
+        ori_constraint.link_name = "left_palm_ee";
         ori_constraint.orientation = target_pose.orientation;
         ori_constraint.absolute_x_axis_tolerance = 0.1;
         ori_constraint.absolute_y_axis_tolerance = 0.1;
@@ -534,13 +681,13 @@ private:
             auto response = future.get();
             if (response->motion_plan_response.error_code.val == moveit_msgs::msg::MoveItErrorCodes::SUCCESS) {
                 result = response->motion_plan_response.trajectory;
-                RCLCPP_INFO(this->get_logger(), "Planning successful for left arm");
+                RCLCPP_INFO(this->get_logger(), "Joint space planning successful for left arm");
             } else {
-                RCLCPP_ERROR(this->get_logger(), "Planning failed for left arm, error code: %d",
+                RCLCPP_ERROR(this->get_logger(), "Joint space planning failed for left arm, error code: %d",
                              response->motion_plan_response.error_code.val);
             }
         } else {
-            RCLCPP_ERROR(this->get_logger(), "Planning service timeout for left arm");
+            RCLCPP_ERROR(this->get_logger(), "Joint space planning service timeout for left arm");
         }
         return result;
     }
@@ -1249,6 +1396,7 @@ private:
     rclcpp_action::Server<MotionPlan>::SharedPtr action_server_;
     std::shared_ptr<GoalHandleMotionPlan> current_goal_handle_;
     rclcpp::Client<MotionPlanService>::SharedPtr planning_client_;
+    rclcpp::Client<moveit_msgs::srv::GetCartesianTrajectory>::SharedPtr cartesian_planning_client_;
 
     rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr subscription_cv_;
 
