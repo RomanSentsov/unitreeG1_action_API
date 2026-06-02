@@ -1,0 +1,25 @@
+moveit_setup_assistant_config:
+  urdf:
+    package: g1_robot_description
+    relative_path: urdf/g1_29dof_rev_1_0_with_inspire_hand_FTP.urdf
+  srdf:
+    relative_path: config/g1_29dof_rev_1_0_with_inspire_hand_FTP.srdf
+  package_settings:
+    author_name: roman
+    author_email: rkey695@gmail.com
+    generated_timestamp: 1780398252
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+      - velocity
+  modified_urdf:
+    xacros:
+      - control_xacro
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+      - velocity

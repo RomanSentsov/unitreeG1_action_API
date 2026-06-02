@@ -20,7 +20,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/pelvis.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/pelvis.STL"/>
       </geometry>
       <material name="dark"/>
     </visual>
@@ -34,7 +34,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/pelvis_contour_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/pelvis_contour_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -43,7 +43,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/pelvis_contour_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/pelvis_contour_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -62,14 +62,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_hip_pitch_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_hip_pitch_link.STL"/>
       </geometry>
       <material name="dark"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_hip_pitch_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_hip_pitch_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -89,7 +89,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_hip_roll_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_hip_roll_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -98,7 +98,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_hip_roll_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_hip_roll_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -118,7 +118,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_hip_yaw_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_hip_yaw_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -127,7 +127,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_hip_yaw_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_hip_yaw_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -147,7 +147,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_knee_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_knee_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -156,7 +156,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_knee_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_knee_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -176,7 +176,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_ankle_pitch_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_ankle_pitch_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -185,7 +185,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_ankle_pitch_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_ankle_pitch_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -205,7 +205,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_ankle_roll_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_ankle_roll_link.STL"/>
       </geometry>
       <material name="dark"/>
     </visual>
@@ -250,14 +250,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_hip_pitch_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_hip_pitch_link.STL"/>
       </geometry>
       <material name="dark"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_hip_pitch_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_hip_pitch_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -277,7 +277,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_hip_roll_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_hip_roll_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -286,7 +286,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_hip_roll_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_hip_roll_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -306,7 +306,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_hip_yaw_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_hip_yaw_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -315,7 +315,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_hip_yaw_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_hip_yaw_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -335,7 +335,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_knee_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_knee_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -344,7 +344,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_knee_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_knee_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -364,7 +364,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_ankle_pitch_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_ankle_pitch_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -373,7 +373,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_ankle_pitch_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_ankle_pitch_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -393,7 +393,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_ankle_roll_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_ankle_roll_link.STL"/>
       </geometry>
       <material name="dark"/>
     </visual>
@@ -440,7 +440,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/waist_yaw_link_rev_1_0.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/waist_yaw_link_rev_1_0.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -463,7 +463,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/waist_roll_link_rev_1_0.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/waist_roll_link_rev_1_0.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -486,7 +486,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/torso_link_rev_1_0.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/torso_link_rev_1_0.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -495,7 +495,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/torso_link_rev_1_0.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/torso_link_rev_1_0.STL"/>
       </geometry>
     </collision>
   </link>
@@ -522,14 +522,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/logo_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/logo_link.STL"/>
       </geometry>
       <material name="dark"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/logo_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/logo_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -544,14 +544,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/head_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/head_link.STL"/>
       </geometry>
       <material name="dark"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/head_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/head_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -602,7 +602,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_shoulder_pitch_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_shoulder_pitch_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -631,7 +631,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_shoulder_roll_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_shoulder_roll_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -660,7 +660,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_shoulder_yaw_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_shoulder_yaw_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -669,7 +669,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_shoulder_yaw_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_shoulder_yaw_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -689,7 +689,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_elbow_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_elbow_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -698,7 +698,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_elbow_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_elbow_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -725,7 +725,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_wrist_roll_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_wrist_roll_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -734,7 +734,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_wrist_roll_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_wrist_roll_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -754,7 +754,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_wrist_pitch_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_wrist_pitch_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -763,7 +763,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_wrist_pitch_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_wrist_pitch_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -783,7 +783,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_wrist_yaw_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_wrist_yaw_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -792,7 +792,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_wrist_yaw_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_wrist_yaw_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -805,7 +805,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_shoulder_pitch_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_shoulder_pitch_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -834,7 +834,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_shoulder_roll_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_shoulder_roll_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -863,7 +863,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_shoulder_yaw_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_shoulder_yaw_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -872,7 +872,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_shoulder_yaw_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_shoulder_yaw_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -892,7 +892,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_elbow_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_elbow_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -901,7 +901,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_elbow_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_elbow_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -928,7 +928,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_wrist_roll_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_wrist_roll_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -937,7 +937,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_wrist_roll_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_wrist_roll_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -957,7 +957,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_wrist_pitch_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_wrist_pitch_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -966,7 +966,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_wrist_pitch_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_wrist_pitch_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -986,7 +986,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_wrist_yaw_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_wrist_yaw_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -995,7 +995,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_wrist_yaw_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_wrist_yaw_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1013,7 +1013,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_base_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_base_link.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1"/>
@@ -1022,7 +1022,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_base_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_base_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1035,7 +1035,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_palm_force_sensor.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_palm_force_sensor.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -1044,10 +1044,32 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_palm_force_sensor.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_palm_force_sensor.STL"/>
       </geometry>
     </collision>
   </link>
+
+<!-- ee left hand -->
+  
+  <link name="left_palm_ee">
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5708 0 1.5708"/>
+      <geometry>
+        <sphere radius="0.003"/>
+      </geometry>
+      <material name="">
+        <color rgba="1 0 0 1"/>
+      </material>
+    </visual>
+  </link>
+  
+  <joint name="left_palm_ee_joint" type="fixed">
+    <origin xyz="0.00036819 0.012296 0.1196" rpy="3.1416 -1.5708 0"/>
+    <parent link="left_base_link"/>
+    <child link="left_palm_ee"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  
   <joint name="left_palm_force_sensor_joint" type="fixed">
     <origin xyz="0.00036819 0.012296 0.1196" rpy="1.5708 0 3.1416"/>
     <parent link="left_base_link"/>
@@ -1063,7 +1085,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_thumb_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_thumb_1.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1"/>
@@ -1072,7 +1094,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_thumb_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_thumb_1.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1092,7 +1114,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_thumb_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_thumb_2.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1"/>
@@ -1101,7 +1123,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_thumb_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_thumb_2.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1121,7 +1143,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_thumb_force_sensor_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_thumb_force_sensor_1.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -1130,7 +1152,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_thumb_force_sensor_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_thumb_force_sensor_1.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1149,7 +1171,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_thumb_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_thumb_3.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1"/>
@@ -1158,7 +1180,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_thumb_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_thumb_3.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1179,7 +1201,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_thumb_force_sensor_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_thumb_force_sensor_2.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -1188,7 +1210,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_thumb_force_sensor_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_thumb_force_sensor_2.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1207,7 +1229,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_thumb_4.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_thumb_4.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1"/>
@@ -1216,7 +1238,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_thumb_4.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_thumb_4.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1237,7 +1259,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_thumb_force_sensor_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_thumb_force_sensor_3.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -1246,7 +1268,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_thumb_force_sensor_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_thumb_force_sensor_3.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1265,7 +1287,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_thumb_force_sensor_4.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_thumb_force_sensor_4.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -1274,7 +1296,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_thumb_force_sensor_4.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_thumb_force_sensor_4.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1293,7 +1315,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_index_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_index_1.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1"/>
@@ -1302,7 +1324,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_index_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_index_1.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1322,7 +1344,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_index_force_sensor_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_index_force_sensor_1.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -1331,7 +1353,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_index_force_sensor_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_index_force_sensor_1.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1350,7 +1372,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_index_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_index_2.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1"/>
@@ -1359,7 +1381,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_index_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_index_2.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1380,7 +1402,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_index_force_sensor_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_index_force_sensor_2.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -1389,7 +1411,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_index_force_sensor_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_index_force_sensor_2.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1408,7 +1430,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_index_force_sensor_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_index_force_sensor_3.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -1417,7 +1439,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_index_force_sensor_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_index_force_sensor_3.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1436,7 +1458,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_middle_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_middle_1.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1"/>
@@ -1445,7 +1467,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_middle_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_middle_1.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1465,7 +1487,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_middle_force_sensor_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_middle_force_sensor_1.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -1474,7 +1496,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_middle_force_sensor_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_middle_force_sensor_1.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1493,7 +1515,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_middle_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_middle_2.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1"/>
@@ -1502,7 +1524,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_middle_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_middle_2.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1523,7 +1545,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_middle_force_sensor_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_middle_force_sensor_2.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -1532,7 +1554,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_middle_force_sensor_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_middle_force_sensor_2.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1551,7 +1573,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_middle_force_sensor_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_middle_force_sensor_3.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -1560,7 +1582,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_middle_force_sensor_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_middle_force_sensor_3.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1579,7 +1601,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_ring_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_ring_1.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1"/>
@@ -1588,7 +1610,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_ring_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_ring_1.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1608,7 +1630,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_ring_force_sensor_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_ring_force_sensor_1.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -1617,7 +1639,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_ring_force_sensor_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_ring_force_sensor_1.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1636,7 +1658,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_ring_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_ring_2.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1"/>
@@ -1645,7 +1667,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_ring_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_ring_2.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1666,7 +1688,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_ring_force_sensor_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_ring_force_sensor_2.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -1675,7 +1697,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_ring_force_sensor_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_ring_force_sensor_2.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1694,7 +1716,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_ring_force_sensor_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_ring_force_sensor_3.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -1703,7 +1725,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_ring_force_sensor_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_ring_force_sensor_3.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1722,7 +1744,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_little_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_little_1.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1"/>
@@ -1731,7 +1753,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_little_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_little_1.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1751,7 +1773,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_little_force_sensor_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_little_force_sensor_1.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -1760,7 +1782,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_little_force_sensor_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_little_force_sensor_1.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1779,7 +1801,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_little_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_little_2.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1"/>
@@ -1788,7 +1810,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_little_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_little_2.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1809,7 +1831,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_little_force_sensor_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_little_force_sensor_2.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -1818,7 +1840,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_little_force_sensor_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_little_force_sensor_2.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1837,7 +1859,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_little_force_sensor_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_little_force_sensor_3.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -1846,7 +1868,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_little_force_sensor_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/left_little_force_sensor_3.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1871,7 +1893,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_base_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_base_link.STL"/>
       </geometry>
       <material name="">
         <color rgba="1 1 1 1"/>
@@ -1880,7 +1902,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_base_link.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_base_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1893,7 +1915,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_palm_force_sensor.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_palm_force_sensor.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -1902,10 +1924,34 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_palm_force_sensor.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_palm_force_sensor.STL"/>
       </geometry>
     </collision>
   </link>
+
+
+  <!-- ee right hand -->
+  
+  
+  <link name="right_palm_ee">
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5708 0 1.5708"/>
+      <geometry>
+        <sphere radius="0.003"/>
+      </geometry>
+      <material name="">
+        <color rgba="1 0 0 1"/>
+      </material>
+    </visual>
+  </link>
+  
+  <joint name="right_palm_ee_joint" type="fixed">
+    <origin xyz="-0.00036819 0.012296 0.1196" rpy="0 -1.5708 0"/>
+    <parent link="right_base_link"/>
+    <child link="right_palm_ee"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  
   <joint name="right_palm_force_sensor_joint" type="fixed">
     <origin xyz="-0.00036819 0.012296 0.1196" rpy="1.5708 0 -3.1416"/>
     <parent link="right_base_link"/>
@@ -1921,7 +1967,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_thumb_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_thumb_1.STL"/>
       </geometry>
       <material name="">
         <color rgba="1 1 1 1"/>
@@ -1930,7 +1976,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_thumb_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_thumb_1.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1950,7 +1996,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_thumb_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_thumb_2.STL"/>
       </geometry>
       <material name="">
         <color rgba="1 1 1 1"/>
@@ -1959,7 +2005,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_thumb_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_thumb_2.STL"/>
       </geometry>
     </collision>
   </link>
@@ -1979,7 +2025,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_thumb_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_thumb_3.STL"/>
       </geometry>
       <material name="">
         <color rgba="1 1 1 1"/>
@@ -1988,7 +2034,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_thumb_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_thumb_3.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2009,7 +2055,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_thumb_force_sensor_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_thumb_force_sensor_2.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -2018,7 +2064,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_thumb_force_sensor_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_thumb_force_sensor_2.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2037,7 +2083,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_thumb_4.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_thumb_4.STL"/>
       </geometry>
       <material name="">
         <color rgba="1 1 1 1"/>
@@ -2046,7 +2092,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_thumb_4.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_thumb_4.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2067,7 +2113,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_thumb_force_sensor_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_thumb_force_sensor_3.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -2076,7 +2122,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_thumb_force_sensor_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_thumb_force_sensor_3.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2095,7 +2141,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_thumb_force_sensor_4.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_thumb_force_sensor_4.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -2104,7 +2150,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_thumb_force_sensor_4.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_thumb_force_sensor_4.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2123,7 +2169,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_thumb_force_sensor_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_thumb_force_sensor_1.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -2132,7 +2178,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_thumb_force_sensor_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_thumb_force_sensor_1.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2151,7 +2197,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_index_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_index_1.STL"/>
       </geometry>
       <material name="">
         <color rgba="1 1 1 1"/>
@@ -2160,7 +2206,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_index_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_index_1.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2180,7 +2226,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_index_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_index_2.STL"/>
       </geometry>
       <material name="">
         <color rgba="1 1 1 1"/>
@@ -2189,7 +2235,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_index_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_index_2.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2210,7 +2256,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_index_force_sensor_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_index_force_sensor_2.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -2219,7 +2265,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_index_force_sensor_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_index_force_sensor_2.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2238,7 +2284,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_index_force_sensor_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_index_force_sensor_3.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -2247,7 +2293,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_index_force_sensor_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_index_force_sensor_3.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2266,7 +2312,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_index_force_sensor_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_index_force_sensor_1.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -2275,7 +2321,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_index_force_sensor_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_index_force_sensor_1.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2294,7 +2340,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_middle_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_middle_1.STL"/>
       </geometry>
       <material name="">
         <color rgba="1 1 1 1"/>
@@ -2303,7 +2349,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_middle_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_middle_1.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2323,7 +2369,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_middle_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_middle_2.STL"/>
       </geometry>
       <material name="">
         <color rgba="1 1 1 1"/>
@@ -2332,7 +2378,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_middle_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_middle_2.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2353,7 +2399,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_middle_force_sensor_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_middle_force_sensor_2.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -2362,7 +2408,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_middle_force_sensor_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_middle_force_sensor_2.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2381,7 +2427,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_middle_force_sensor_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_middle_force_sensor_3.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -2390,7 +2436,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_middle_force_sensor_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_middle_force_sensor_3.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2409,7 +2455,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_middle_force_sensor_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_middle_force_sensor_1.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -2418,7 +2464,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_middle_force_sensor_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_middle_force_sensor_1.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2437,7 +2483,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_ring_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_ring_1.STL"/>
       </geometry>
       <material name="">
         <color rgba="1 1 1 1"/>
@@ -2446,7 +2492,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_ring_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_ring_1.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2466,7 +2512,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_ring_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_ring_2.STL"/>
       </geometry>
       <material name="">
         <color rgba="1 1 1 1"/>
@@ -2475,7 +2521,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_ring_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_ring_2.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2496,7 +2542,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_ring_force_sensor_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_ring_force_sensor_2.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -2505,7 +2551,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_ring_force_sensor_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_ring_force_sensor_2.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2524,7 +2570,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_ring_force_sensor_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_ring_force_sensor_3.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -2533,7 +2579,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_ring_force_sensor_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_ring_force_sensor_3.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2552,7 +2598,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_ring_force_sensor_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_ring_force_sensor_1.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -2561,7 +2607,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_ring_force_sensor_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_ring_force_sensor_1.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2580,7 +2626,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_little_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_little_1.STL"/>
       </geometry>
       <material name="">
         <color rgba="1 1 1 1"/>
@@ -2589,7 +2635,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_little_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_little_1.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2609,7 +2655,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_little_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_little_2.STL"/>
       </geometry>
       <material name="">
         <color rgba="1 1 1 1"/>
@@ -2618,7 +2664,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_little_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_little_2.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2639,7 +2685,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_little_force_sensor_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_little_force_sensor_2.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -2648,7 +2694,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_little_force_sensor_2.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_little_force_sensor_2.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2667,16 +2713,16 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_little_force_sensor_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_little_force_sensor_3.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>package://g1_robot_description/urdf/meshespackage://g1_robot_description/urdf/meshespackage://g1_robot_description/urdf/meshes
       <geometry>
-        <mesh filename="meshes/right_little_force_sensor_3.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_little_force_sensor_3.STL"/>
       </geometry>
     </collision>
   </link>
@@ -2695,7 +2741,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_little_force_sensor_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_little_force_sensor_1.STL"/>
       </geometry>
       <material name="">
         <color rgba="0.411764705882353 0.411764705882353 0.411764705882353 1"/>
@@ -2704,7 +2750,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_little_force_sensor_1.STL"/>
+        <mesh filename="package://g1_robot_description/urdf/meshes/right_little_force_sensor_1.STL"/>
       </geometry>
     </collision>
   </link>
