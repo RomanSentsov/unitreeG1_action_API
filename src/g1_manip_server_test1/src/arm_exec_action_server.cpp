@@ -16,9 +16,14 @@
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "moveit_msgs/msg/robot_trajectory.hpp"
+
 #include "moveit_msgs/srv/get_motion_plan.hpp"
-#include "moveit_msgs/srv/get_cartesian_trajectory.hpp"
+
+#include "moveit_msgs/srv/get_cartesian_path.hpp"
+#include "moveit_msgs/msg/cartesian_trajectory.hpp"
+
 #include "trajectory_msgs/msg/joint_trajectory_point.hpp"
+
 #include "unitree_hg/msg/low_cmd.hpp"
 #include "unitree_hg/msg/low_state.hpp"
 #include "common/motor_crc_hg.h"
@@ -260,8 +265,8 @@ public:
         // MoveIt client
         planning_client_ = this->create_client<MotionPlanService>("/plan_kinematic_path");
 
-        cartesian_planning_client_ = this->create_client<moveit_msgs::srv::GetCartesianTrajectory>(
-            "/compute_cartesian_trajectory");
+        cartesian_planning_client_ = this->create_client<moveit_msgs::srv::GetCartesianPath>(
+            "/compute_cartesian_path");
 
         // LowState subscriber
         lowstate_subscriber_ = this->create_subscription<unitree_hg::msg::LowState>(
@@ -404,7 +409,7 @@ private:
         
         if (cartesian_planning_client_->wait_for_service(std::chrono::seconds(1))) {
             // Создаём запрос для Cartesian пути
-            moveit_msgs::msg::CartesianTrajectoryRequest cartesian_request;
+            moveit_msgs::srv::GetCartesianPath::Request cartesian_request;
             cartesian_request.header.frame_id = "pelvis";
             cartesian_request.group_name = "arm_r";
             cartesian_request.link_name = "right_palm_ee";
@@ -434,7 +439,9 @@ private:
             cartesian_request.waypoints.push_back(target_pose);
             
             // Добавляем ориентационные ограничения
+            moveit_msgs::msg::Constraints path_constraints;
             moveit_msgs::msg::OrientationConstraint cartesian_ori_constraint;
+
             cartesian_ori_constraint.header.frame_id = "pelvis";
             cartesian_ori_constraint.link_name = "right_palm_ee";
             cartesian_ori_constraint.orientation = target_pose.orientation;
@@ -442,17 +449,19 @@ private:
             cartesian_ori_constraint.absolute_y_axis_tolerance = 0.1;
             cartesian_ori_constraint.absolute_z_axis_tolerance = 0.1;
             cartesian_ori_constraint.weight = 1.0;
-            cartesian_request.orientation_constraints.push_back(cartesian_ori_constraint);
+
+            path_constraints.orientation_constraints.push_back(cartesian_ori_constraint);
+            cartesian_request.path_constraints = path_constraints;
             
             // Отправляем запрос на Cartesian планирование
             auto cartesian_future = cartesian_planning_client_->async_send_request(
-                std::make_shared<moveit_msgs::srv::GetCartesianTrajectory::Request>(cartesian_request));
+                std::make_shared<moveit_msgs::srv::GetCartesianPath::Request>(cartesian_request));
             
             auto cartesian_status = cartesian_future.wait_for(std::chrono::seconds(5));
             if (cartesian_status == std::future_status::ready) {
                 auto cartesian_response = cartesian_future.get();
                 if (cartesian_response->error_code.val == moveit_msgs::msg::MoveItErrorCodes::SUCCESS) {
-                    result = cartesian_response->trajectory;
+                    result = cartesian_response->solution;
                     RCLCPP_INFO(this->get_logger(), "Cartesian path planning successful for right arm. Trajectory has %zu points",
                                  result.joint_trajectory.points.size());
                     return result;
@@ -568,7 +577,7 @@ private:
         
         if (cartesian_planning_client_->wait_for_service(std::chrono::seconds(1))) {
             // Создаём запрос для Cartesian пути
-            moveit_msgs::msg::CartesianTrajectoryRequest cartesian_request;
+            moveit_msgs::srv::GetCartesianPath::Request cartesian_request;
             cartesian_request.header.frame_id = "pelvis";
             cartesian_request.group_name = "arm_l";
             cartesian_request.link_name = "left_palm_ee";
@@ -597,25 +606,29 @@ private:
             cartesian_request.waypoints.push_back(target_pose);
             
             // Добавляем ориентационные ограничения
+            moveit_msgs::msg::Constraints path_constraints;
             moveit_msgs::msg::OrientationConstraint cartesian_ori_constraint;
+
             cartesian_ori_constraint.header.frame_id = "pelvis";
-            cartesian_ori_constraint.link_name = "left_palm_ee";
+            cartesian_ori_constraint.link_name = "right_palm_ee";
             cartesian_ori_constraint.orientation = target_pose.orientation;
             cartesian_ori_constraint.absolute_x_axis_tolerance = 0.1;
             cartesian_ori_constraint.absolute_y_axis_tolerance = 0.1;
             cartesian_ori_constraint.absolute_z_axis_tolerance = 0.1;
             cartesian_ori_constraint.weight = 1.0;
-            cartesian_request.orientation_constraints.push_back(cartesian_ori_constraint);
+
+            path_constraints.orientation_constraints.push_back(cartesian_ori_constraint);
+            cartesian_request.path_constraints = path_constraints;
             
             // Отправляем запрос на Cartesian планирование
             auto cartesian_future = cartesian_planning_client_->async_send_request(
-                std::make_shared<moveit_msgs::srv::GetCartesianTrajectory::Request>(cartesian_request));
+                std::make_shared<moveit_msgs::srv::GetCartesianPath::Request>(cartesian_request));
             
             auto cartesian_status = cartesian_future.wait_for(std::chrono::seconds(5));
             if (cartesian_status == std::future_status::ready) {
                 auto cartesian_response = cartesian_future.get();
                 if (cartesian_response->error_code.val == moveit_msgs::msg::MoveItErrorCodes::SUCCESS) {
-                    result = cartesian_response->trajectory;
+                    result = cartesian_response->solution;
                     RCLCPP_INFO(this->get_logger(), "Cartesian path planning successful for left arm. Trajectory has %zu points",
                                  result.joint_trajectory.points.size());
                     return result;
@@ -1396,7 +1409,8 @@ private:
     rclcpp_action::Server<MotionPlan>::SharedPtr action_server_;
     std::shared_ptr<GoalHandleMotionPlan> current_goal_handle_;
     rclcpp::Client<MotionPlanService>::SharedPtr planning_client_;
-    rclcpp::Client<moveit_msgs::srv::GetCartesianTrajectory>::SharedPtr cartesian_planning_client_;
+
+    rclcpp::Client<moveit_msgs::srv::GetCartesianPath>::SharedPtr cartesian_planning_client_;
 
     rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr subscription_cv_;
 
