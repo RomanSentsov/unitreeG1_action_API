@@ -78,7 +78,7 @@ const std::vector<int> ALL_ARM_MOTORS = {
 // TODO: Настроить
 const std::array<float, G1_NUM_MOTOR> Kp = {
     60, 60, 60, 100, 40, 40, 60, 60, 60, 100, 40, 40, 400, 240, 240,
-    90, 90, 80, 80, 40, 40, 40, 90, 90, 80, 80, 40, 40, 40 //L arm and R arm, shoulder to wrist
+    150, 150, 100, 100, 60, 60, 60, 150, 150, 100, 100, 60, 60, 60 //L arm and R arm, shoulder to wrist
 };
 const std::array<float, G1_NUM_MOTOR> Kd = {
     1, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1,
@@ -371,6 +371,7 @@ private:
     }
 
     // Планирование для правой руки
+    // Планирование для правой руки
     moveit_msgs::msg::RobotTrajectory plan_from_current_right(
         double x, double y, double z,
         double roll = 0.0, double pitch = 0.0, double yaw = 0.0) {
@@ -427,7 +428,7 @@ private:
             cartesian_request.start_state.joint_state.velocity = std::vector<double>(7, 0.0);
             cartesian_request.start_state.joint_state.effort = std::vector<double>(7, 0.0);
             
-            // Добавляем waypoints (только целевая точка, начальная будет взята из текущего состояния)
+            // Добавляем целевую точку
             geometry_msgs::msg::Pose target_pose;
             target_pose.position.x = x;
             target_pose.position.y = y;
@@ -438,22 +439,7 @@ private:
             target_pose.orientation.w = qw;
             cartesian_request.waypoints.push_back(target_pose);
             
-            // Добавляем ориентационные ограничения
-            moveit_msgs::msg::Constraints path_constraints;
-            moveit_msgs::msg::OrientationConstraint cartesian_ori_constraint;
-
-            cartesian_ori_constraint.header.frame_id = "pelvis";
-            cartesian_ori_constraint.link_name = "right_palm_ee";
-            cartesian_ori_constraint.orientation = target_pose.orientation;
-            cartesian_ori_constraint.absolute_x_axis_tolerance = 0.1;
-            cartesian_ori_constraint.absolute_y_axis_tolerance = 0.1;
-            cartesian_ori_constraint.absolute_z_axis_tolerance = 0.1;
-            cartesian_ori_constraint.weight = 1.0;
-
-            path_constraints.orientation_constraints.push_back(cartesian_ori_constraint);
-            cartesian_request.path_constraints = path_constraints;
-            
-            // Отправляем запрос на Cartesian планирование
+            // Отправляем запрос на Cartesian планирование (без дополнительных ограничений)
             auto cartesian_future = cartesian_planning_client_->async_send_request(
                 std::make_shared<moveit_msgs::srv::GetCartesianPath::Request>(cartesian_request));
             
@@ -587,14 +573,14 @@ private:
             
             cartesian_request.start_state.is_diff = true;
             cartesian_request.start_state.joint_state.name = {
-            "left_shoulder_pitch_joint", "left_shoulder_roll_joint", "left_shoulder_yaw_joint",
-            "left_elbow_joint", "left_wrist_roll_joint", "left_wrist_pitch_joint", "left_wrist_yaw_joint"
+                "left_shoulder_pitch_joint", "left_shoulder_roll_joint", "left_shoulder_yaw_joint",
+                "left_elbow_joint", "left_wrist_roll_joint", "left_wrist_pitch_joint", "left_wrist_yaw_joint"
             };
             cartesian_request.start_state.joint_state.position = start_positions;
             cartesian_request.start_state.joint_state.velocity = std::vector<double>(7, 0.0);
             cartesian_request.start_state.joint_state.effort = std::vector<double>(7, 0.0);
 
-            // Добавляем waypoints (только целевая точка, начальная будет взята из текущего состояния)
+            // Добавляем целевую точку
             geometry_msgs::msg::Pose target_pose;
             target_pose.position.x = x;
             target_pose.position.y = y;
@@ -605,22 +591,7 @@ private:
             target_pose.orientation.w = qw;
             cartesian_request.waypoints.push_back(target_pose);
             
-            // Добавляем ориентационные ограничения
-            moveit_msgs::msg::Constraints path_constraints;
-            moveit_msgs::msg::OrientationConstraint cartesian_ori_constraint;
-
-            cartesian_ori_constraint.header.frame_id = "pelvis";
-            cartesian_ori_constraint.link_name = "right_palm_ee";
-            cartesian_ori_constraint.orientation = target_pose.orientation;
-            cartesian_ori_constraint.absolute_x_axis_tolerance = 0.1;
-            cartesian_ori_constraint.absolute_y_axis_tolerance = 0.1;
-            cartesian_ori_constraint.absolute_z_axis_tolerance = 0.1;
-            cartesian_ori_constraint.weight = 1.0;
-
-            path_constraints.orientation_constraints.push_back(cartesian_ori_constraint);
-            cartesian_request.path_constraints = path_constraints;
-            
-            // Отправляем запрос на Cartesian планирование
+            // Отправляем запрос на Cartesian планирование (без дополнительных ограничений)
             auto cartesian_future = cartesian_planning_client_->async_send_request(
                 std::make_shared<moveit_msgs::srv::GetCartesianPath::Request>(cartesian_request));
             
@@ -1133,9 +1104,9 @@ private:
             for (int idx : ALL_ARM_MOTORS) {
                 cmd.q_target[idx] = current_state->q[idx];
             }
-            cmd.q_target[WAIST_YAW] = current_state->q[WAIST_YAW];
-            cmd.q_target[WAIST_ROLL] = current_state->q[WAIST_ROLL];
-            cmd.q_target[WAIST_PITCH] = current_state->q[WAIST_PITCH];
+            cmd.q_target[WAIST_YAW] = 0.0;
+            cmd.q_target[WAIST_ROLL] = 0.0;
+            cmd.q_target[WAIST_PITCH] = 0.0;
         }
         else {
             for (int idx : ALL_ARM_MOTORS) {
@@ -1371,34 +1342,37 @@ private:
 
         // Включаем управление руками
         enable();
+        //Safe pose up and left
+        move_to_pose_left(0.15, 0.25, 0.25);
 	
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));      
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));      
         
-        move_to_pose_left(current_handle_xyz_[0] + 0.02, current_handle_xyz_[1] + 0.15, current_handle_xyz_[2] + 0.08);
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        move_to_pose_left(current_handle_xyz_[0] - 0.02, current_handle_xyz_[1] + 0.20, current_handle_xyz_[2] + 0.02);
+        
+        execute_hand_gesture(
+            dftp_hand::HandSide::LEFT, 
+            dftp_hand::Gesture::FREE_WRIST, 
+            800);
+        
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        
+        move_to_pose_left(current_handle_xyz_[0] - 0.02 , current_handle_xyz_[1] + 0.045, current_handle_xyz_[2] + 0.02);
         
         execute_hand_gesture(
             dftp_hand::HandSide::LEFT, 
             dftp_hand::Gesture::PREP_PREP_GRASP, 
             800);
-        
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-        
-        move_to_pose_left(current_handle_xyz_[0] + 0.02, current_handle_xyz_[1] + 0.03, current_handle_xyz_[2] + 0.08);
-        
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-        
+
         execute_hand_gesture(
             dftp_hand::HandSide::LEFT, 
             dftp_hand::Gesture::GRASP_DOOR_HANDLE, 
             800);
             
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));    
+
+        move_to_pose_left(0.15, 0.25, 0.25);
         
-        move_to_pose_left(current_handle_xyz_[0] - 0.1, current_handle_xyz_[1], current_handle_xyz_[2] + 0.05);
-        
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
         soft_disable();
     }
