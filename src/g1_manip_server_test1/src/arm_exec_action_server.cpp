@@ -580,14 +580,15 @@ public:
 private:
     // CV test
     void goal_callback(const geometry_msgs::msg::PointStamped::SharedPtr msg) {
-        // Обновляем вектор [x, y, z] из топика
+        // Обновляем вектор [x, y, z] из топика: x -1 см, z +1 см
         current_goal_xyz_.clear();
-        current_goal_xyz_.push_back(msg->point.x);
-        current_goal_xyz_.push_back(msg->point.y);
-        current_goal_xyz_.push_back(msg->point.z);
+        current_goal_xyz_.push_back(msg->point.x - 0.01);   // -1 см по X
+        current_goal_xyz_.push_back(msg->point.y);          // Y без изменений
+        current_goal_xyz_.push_back(msg->point.z + 0.01);   // +1 см по Z
         has_goal_xyz_ = true;
         RCLCPP_INFO(this->get_logger(),
-            "Received goal position - x: %.3f, y: %.3f, z: %.3f",
+            "Received goal position - original: (%.3f, %.3f, %.3f) -> shifted: (%.3f, %.3f, %.3f)",
+            msg->point.x, msg->point.y, msg->point.z,
             current_goal_xyz_[0], current_goal_xyz_[1], current_goal_xyz_[2]);
     }
 
