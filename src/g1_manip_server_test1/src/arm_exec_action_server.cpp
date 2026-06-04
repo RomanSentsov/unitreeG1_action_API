@@ -349,7 +349,7 @@ private:
 
         // 6. target_loc (3) – пока захардкожено, позже из current_handle_xyz_
         // Зажимаем в диапазоны DreamControl: x: 0.43-0.54, y: -0.27- -0.13, z: 0.13-0.31
-        float target_x = 0.48f, target_y = -0.20f, target_z = 0.28f;
+        float target_x = 0.48f, target_y = -0.20f, target_z = 0.22f;
         obs[52] = target_x;
         obs[53] = target_y;
         obs[54] = target_z;
@@ -1166,6 +1166,10 @@ private:
 
                         std::array<float, G1_NUM_MOTOR> q_target;
                         if (neural_manager_->getCurrentCommand(q_target, last_low_state_)) {
+                            // Принудительное удержание пояса в нулях (чтобы корпус не вращался)
+                            q_target[WAIST_YAW] = 0.0f;
+                            q_target[WAIST_ROLL] = 0.0f;
+                            q_target[WAIST_PITCH] = 0.0f;
                             // ========== 1. Отправка запроса на проверку коллизий (если ещё не отправлен) ==========
                             if (!is_waiting_for_collision_result_) {
                                 // Сохраняем pending-команду (ту, которую будем проверять)
