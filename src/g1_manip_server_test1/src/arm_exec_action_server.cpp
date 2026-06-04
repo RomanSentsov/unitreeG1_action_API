@@ -285,6 +285,9 @@ public:
     }
     std::vector<float> getCurrentRawAction() const { return current_action_; }
 
+    void setGoalXYZ(const std::vector<double>& xyz) { goal_xyz_ = xyz; has_goal_xyz_ = !xyz.empty(); }
+    bool hasGoalXYZ() const { return has_goal_xyz_; }
+
 private:
     // Преобразование raw action в целевые углы суставов
     std::array<float, G1_NUM_MOTOR> actionToQTarget(const std::vector<float>& action,
@@ -349,7 +352,16 @@ private:
 
         // 6. target_loc (3) – пока захардкожено, позже из current_handle_xyz_
         // Зажимаем в диапазоны DreamControl: x: 0.43-0.54, y: -0.27- -0.13, z: 0.13-0.31
-        float target_x = 0.48f, target_y = -0.20f, target_z = 0.22f;
+        float target_x = 0.48f, target_y = -0.20f, target_z = 0.28f; // значения по умолчанию
+        if (has_goal_xyz_ && goal_xyz_.size() >= 3) {
+            // Зажимаем в диапазоны DreamControl: x: 0.43-0.54, y: -0.27- -0.13, z: 0.13-0.31
+            target_x = std::max(0.43f, std::min(0.54f, (float)goal_xyz_[0]));
+            target_y = std::max(-0.27f, std::min(-0.13f, (float)goal_xyz_[1]));
+            target_z = std::max(0.13f, std::min(0.31f, (float)goal_xyz_[2]));
+            RCLCPP_INFO(node_->get_logger(), "Using goal from CV: (%.3f, %.3f, %.3f)", target_x, target_y, target_z);
+        } else {
+            RCLCPP_WARN(node_->get_logger(), "No valid goal from CV, using default (%.3f, %.3f, %.3f)", target_x, target_y, target_z);
+        }
         obs[52] = target_x;
         obs[53] = target_y;
         obs[54] = target_z;
@@ -395,6 +407,9 @@ private:
     float action_scale_;
     float dof_pos_scale_;
     float dof_vel_scale_;
+
+    std::vector<double> goal_xyz_;
+    bool has_goal_xyz_ = false;
 };
 
 // ====================================================================
@@ -552,9 +567,9 @@ public:
 
         // CV test
         subscription_cv_ = this->create_subscription<geometry_msgs::msg::PointStamped>(
-            "/detected_handle/xyz",
+            "/detected_goal/xyz",
             10,  // QoS (queue size)
-            std::bind(&ManipulationActionServer::door_handle_callback, this, _1)
+            std::bind(&ManipulationActionServer::goal_callback, this, _1)
         );
         neural_manager_ = std::make_unique<NeuralActionManager>(this);
         std::fill(last_safe_q_target_.begin(), last_safe_q_target_.end(), 0.0f);
@@ -564,18 +579,16 @@ public:
 
 private:
     // CV test
-    void door_handle_callback(const geometry_msgs::msg::PointStamped::SharedPtr msg)
-    {
-        // Обновляем вектор: [x, y, z]
-        current_handle_xyz_.clear();
-        current_handle_xyz_.push_back(msg->point.x);
-        current_handle_xyz_.push_back(msg->point.y);
-        current_handle_xyz_.push_back(msg->point.z);
-
-        // Выводим информацию
+    void goal_callback(const geometry_msgs::msg::PointStamped::SharedPtr msg) {
+        // Обновляем вектор [x, y, z] из топика
+        current_goal_xyz_.clear();
+        current_goal_xyz_.push_back(msg->point.x);
+        current_goal_xyz_.push_back(msg->point.y);
+        current_goal_xyz_.push_back(msg->point.z);
+        has_goal_xyz_ = true;
         RCLCPP_INFO(this->get_logger(),
-                   "Updated handle position - x: %.3f, y: %.3f, z: %.3f",
-                   current_handle_xyz_[0], current_handle_xyz_[1], current_handle_xyz_[2]);
+            "Received goal position - x: %.3f, y: %.3f, z: %.3f",
+            current_goal_xyz_[0], current_goal_xyz_[1], current_goal_xyz_[2]);
     }
 
 
@@ -1573,7 +1586,14 @@ private:
         // Даём время на приближение к дефолтной позе
         RCLCPP_INFO(get_logger(), "Waiting for robot to move to default pose...");
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));  // 2 секунды на движение
-
+        // Передать текущие координаты цели в NeuralActionManager
+        if (!current_goal_xyz_.empty()) {
+            neural_manager_->setGoalXYZ(current_goal_xyz_);
+        } else {
+            neural_manager_->setGoalXYZ({}); // сброс
+            RCLCPP_WARN(get_logger(), "No goal coordinates available, using defaults");
+        }
+        execute_hand_gesture(dftp_hand::HandSide::LEFT, dftp_hand::Gesture::POINT_BUTTON, 800);
 
         if (!neural_manager_->start("button_press", model_path, timeout)) {
             RCLCPP_ERROR(get_logger(), "Failed to start neural manager");
@@ -1604,8 +1624,9 @@ private:
         // Даём 5 мс, чтобы command_generator перешёл в HOLDING_POSE
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
+        execute_hand_gesture(dftp_hand::HandSide::LEFT, dftp_hand::Gesture::FREE_WRIST, 500);
         soft_disable();
-
+        
         is_busy_ = false;
 
         if (current_goal_handle_) {
@@ -1625,7 +1646,6 @@ private:
     rclcpp::Client<MotionPlanService>::SharedPtr planning_client_;
     rclcpp::Client<moveit_msgs::srv::GetStateValidity>::SharedPtr validity_client_;
 
-    rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr subscription_cv_;
 
     rclcpp::Publisher<unitree_hg::msg::LowCmd>::SharedPtr lowcmd_publisher_;
     rclcpp::Subscription<unitree_hg::msg::LowState>::SharedPtr lowstate_subscriber_;
@@ -1635,7 +1655,10 @@ private:
     DataBuffer<MotorCommand> current_command_buffer_;   // Буфер текущих команд
     DataBuffer<MotorState> motor_state_buffer_;
 
-    std::vector<double> current_handle_xyz_;
+    std::vector<double> current_goal_xyz_;      // [x, y, z] - последние полученные координаты
+    bool has_goal_xyz_ = false;                 // флаг, что данные получены
+    rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr subscription_goal_;
+    
     TrajectoryManager trajectory_manager_;              // Буфер траекторий
 
     // Управление нейросетевыми действиями
