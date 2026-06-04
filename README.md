@@ -15,6 +15,10 @@ unitree_ros2
 ```
 ros2 launch g1_moveit_desc_v3 move_group.launch.py
 
+Или если используется inspire hand: (сейчас EE совмещен с ладонью)
+
+ros2 launch g1_moveit_desc_ftp move_group.launch.py
+
 ros2 run inspire_hand_modbus_ros2 hand_modbus_control_node
 
 ros2 run g1_manip_server_test1 arm_exec_action_server
