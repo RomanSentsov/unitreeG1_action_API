@@ -582,7 +582,7 @@
         void goal_callback(const geometry_msgs::msg::PointStamped::SharedPtr msg) {
             // Обновляем вектор [x, y, z] из топика: x -1 см, z +1 см
             current_goal_xyz_.clear();
-            current_goal_xyz_.push_back(msg->point.x);
+            current_goal_xyz_.push_back(msg->point.x - 0.02);
             current_goal_xyz_.push_back(msg->point.y);
             current_goal_xyz_.push_back(msg->point.z);
             if (neural_manager_) {
