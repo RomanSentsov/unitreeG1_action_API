@@ -566,7 +566,7 @@ public:
 
 
         // CV test
-        subscription_cv_ = this->create_subscription<geometry_msgs::msg::PointStamped>(
+        subscription_goal_ = this->create_subscription<geometry_msgs::msg::PointStamped>(
             "/detected_goal/xyz",
             10,  // QoS (queue size)
             std::bind(&ManipulationActionServer::goal_callback, this, _1)
