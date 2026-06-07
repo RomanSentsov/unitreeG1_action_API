@@ -64,5 +64,20 @@ ament_export_libraries(hand_controller_lib)
 ament_export_targets(export_${PROJECT_NAME})
 ament_export_dependencies(rclcpp service_interfaces)
 
-ament_package()
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  find_package(ament_lint_auto REQUIRED)
 
+  ament_add_gtest(test_hand_controller test/test_hand_controller.cpp)
+  if(TARGET test_hand_controller)
+    target_link_libraries(test_hand_controller hand_controller_lib)
+    ament_target_dependencies(test_hand_controller
+      rclcpp
+      service_interfaces
+    )
+  endif()
+
+  ament_lint_auto_find_test_dependencies()
+endif()
+
+ament_package()
