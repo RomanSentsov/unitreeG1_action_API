@@ -3,6 +3,7 @@
 #include <string>
 #include <thread>
 #include <chrono>
+#include <mutex>
 #include <rclcpp/rclcpp.hpp>
 #include <modbus/modbus.h>
 
@@ -87,10 +88,14 @@ public:
             }
         }
 
+        if (!left_connected_) {
+            RCLCPP_WARN(this->get_logger(), "Left hand is not connected. Requests with id=1 will be rejected.");
+        }
+        if (!right_connected_) {
+            RCLCPP_WARN(this->get_logger(), "Right hand is not connected. Requests with id=2 will be rejected.");
+        }
         if (!left_connected_ && !right_connected_) {
-            RCLCPP_FATAL(this->get_logger(), "Failed to connect to ANY hand. Shutting down.");
-            rclcpp::shutdown();
-            return;
+            RCLCPP_WARN(this->get_logger(), "No hands connected. Services stay alive and will reject hand commands.");
         }
 
         // 4. Регистрация сервисов
@@ -130,6 +135,8 @@ private:
     modbus_t *ctx_right_;
     bool left_connected_;
     bool right_connected_;
+    std::mutex left_ctx_mutex_;
+    std::mutex right_ctx_mutex_;
 
     // Сервисы
     rclcpp::Service<service_interfaces::srv::Setpos>::SharedPtr Setpos_Server;
@@ -138,23 +145,28 @@ private:
     rclcpp::Service<service_interfaces::srv::Getposact>::SharedPtr Getposact_Server;
     // ... объяви остальные сервисы если будешь их реализовывать ...
 
+    struct HandContext {
+        modbus_t* ctx;
+        std::mutex* mutex;
+    };
+
     // --- Вспомогательная функция выбора контекста ---
-    modbus_t* get_ctx(int id) {
+    HandContext get_ctx(int id) {
         if (id == 1) {
             if (!left_connected_) {
                 RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Left hand (ID 1) is disconnected!");
-                return nullptr;
+                return {nullptr, nullptr};
             }
-            return ctx_left_;
+            return {ctx_left_, &left_ctx_mutex_};
         } else if (id == 2) {
             if (!right_connected_) {
                 RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Right hand (ID 2) is disconnected!");
-                return nullptr;
+                return {nullptr, nullptr};
             }
-            return ctx_right_;
+            return {ctx_right_, &right_ctx_mutex_};
         } else {
             RCLCPP_ERROR(this->get_logger(), "Invalid Hand ID: %d. Use 1 (Left) or 2 (Right).", id);
-            return nullptr;
+            return {nullptr, nullptr};
         }
     }
 
@@ -163,8 +175,8 @@ private:
     void setpos_callback(const service_interfaces::srv::Setpos::Request::SharedPtr request,
                          const service_interfaces::srv::Setpos::Response::SharedPtr response)
     {
-        modbus_t* ctx = get_ctx(request->id);
-        if (!ctx) {
+        HandContext hand = get_ctx(request->id);
+        if (!hand.ctx) {
             response->pos_accepted = false;
             response->success = false;
             return;
@@ -187,7 +199,8 @@ private:
                 static_cast<uint16_t>(request->pos5)
             };
 
-            int rc = modbus_write_registers(ctx, 1474, 6, positions);
+            std::lock_guard<std::mutex> lock(*hand.mutex);
+            int rc = modbus_write_registers(hand.ctx, 1474, 6, positions);
             // modbus_write_registers возвращает количество записанных регистров при успехе
             response->pos_accepted = (rc == 6);
             response->success = (rc == 6);
@@ -207,8 +220,8 @@ private:
     void setforce_callback(const service_interfaces::srv::Setforce::Request::SharedPtr request,
                            const service_interfaces::srv::Setforce::Response::SharedPtr response)
     {
-        modbus_t* ctx = get_ctx(request->id);
-        if (!ctx) {
+        HandContext hand = get_ctx(request->id);
+        if (!hand.ctx) {
             response->force_accepted = false;
             return;
         }
@@ -229,7 +242,8 @@ private:
                 static_cast<uint16_t>(request->force5)
             };
 
-            int rc = modbus_write_registers(ctx, 1498, 6, forces);
+            std::lock_guard<std::mutex> lock(*hand.mutex);
+            int rc = modbus_write_registers(hand.ctx, 1498, 6, forces);
             response->force_accepted = (rc == 6);
              if (!response->force_accepted) {
                 RCLCPP_ERROR(this->get_logger(), "Modbus write force error (ID %d): %s", request->id, modbus_strerror(errno));
@@ -245,8 +259,8 @@ private:
     void setspeed_callback(const service_interfaces::srv::Setspeed::Request::SharedPtr request,
                            const service_interfaces::srv::Setspeed::Response::SharedPtr response)
     {
-        modbus_t* ctx = get_ctx(request->id);
-        if (!ctx) {
+        HandContext hand = get_ctx(request->id);
+        if (!hand.ctx) {
             response->speed_accepted = false;
             return;
         }
@@ -267,7 +281,8 @@ private:
                 static_cast<uint16_t>(request->speed5)
             };
 
-            int rc = modbus_write_registers(ctx, 1522, 6, speeds);
+            std::lock_guard<std::mutex> lock(*hand.mutex);
+            int rc = modbus_write_registers(hand.ctx, 1522, 6, speeds);
             response->speed_accepted = (rc == 6);
              if (!response->speed_accepted) {
                 RCLCPP_ERROR(this->get_logger(), "Modbus write speed error (ID %d): %s", request->id, modbus_strerror(errno));
@@ -285,9 +300,9 @@ private:
     {
         // ВАЖНО: Убедись, что в Getposact.srv тоже есть поле int16 id!
         // Если нет, добавь его, иначе request->id не скомпилируется или будет мусором.
-        modbus_t* ctx = get_ctx(request->id); 
+        HandContext hand = get_ctx(request->id);
         
-        if (!ctx) {
+        if (!hand.ctx) {
             for(auto& v : response->curpos) v = -1;
             return;
         }
@@ -295,8 +310,9 @@ private:
         int register_addresses[6] = {1534, 1536, 1538, 1540, 1542, 1544};
         uint16_t tab_reg[1];
 
+        std::lock_guard<std::mutex> lock(*hand.mutex);
         for (int i = 0; i < 6; ++i) {
-            int rc = modbus_read_registers(ctx, register_addresses[i], 1, tab_reg);
+            int rc = modbus_read_registers(hand.ctx, register_addresses[i], 1, tab_reg);
             if (rc == -1) {
                 response->curpos[i] = -1;
             } else {
