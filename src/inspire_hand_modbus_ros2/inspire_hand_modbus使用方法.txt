@@ -106,14 +106,7 @@
 	(26)手势序列
 	 ros2 service call /Setgestureno service_interfaces/srv/Setgestureno "{gesture_no: 1,id: 1, status: 'setgesture'}"
 	
-    5)ros topic使用示例：实时读取灵巧手触觉传感器数据,当前脚本为01输出，如需打印全部原始数据可调用handcontroltopicpublisher_modbus（原始数据）。
-     需要重新打开一个新的终端，并执行终端指令：    source devel/setup.bash
-                                            ros2 run inspire_hand_modbus_ros2 handcontroltopicpublisher_modbus_node
-                                                                                                   新开一终端
-                                            ros2 run inspire_hand_modbus_ros2 handcontroltopicsubscriber_modbus_node 
-此示例将在终端打印发送频率以及实时打印当前整手触觉传感器数据。
-
-    6)ros service使用示例：脚本调用service_interfaces/srv中所包含的服务：Setpos
-     需要重新打开一个新的终端，并执行终端指令：    source devel/setup.bash
-                                            ros2 run inspire_hand_modbus_ros2 hand_control_client_modbus_node 
+    5)Note: current workspace installs only hand_modbus_control_node.
+      The old touch topic publisher source is kept under examples/ and is not installed.
+      The old service client, touch subscriber, and raw touch publisher demo nodes were removed.
   

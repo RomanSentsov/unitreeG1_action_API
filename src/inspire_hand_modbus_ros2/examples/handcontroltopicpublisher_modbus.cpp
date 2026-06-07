@@ -112,38 +112,11 @@ void processData(rclcpp::Publisher<std_msgs::msg::Int32MultiArray>::SharedPtr pu
         }
         std_msgs::msg::Int32MultiArray array;
 
-        // 添加手指类型标识和对应数据
         if (new_data.size() >= 1062) {
-            // 小拇指数据
-            for (int i = 0; i < 185; ++i) {
-                array.data.push_back(new_data[i] != 0 ? 1 : 0);
-            }
-
-            // 无名指数据
-            for (int i = 185; i < 370; ++i) {
-                array.data.push_back(new_data[i] != 0 ? 1 : 0);
-            }
-
-            // 中指数据
-            for (int i = 370; i < 555; ++i) {
-                array.data.push_back(new_data[i] != 0 ? 1 : 0);
-            }
-
-            // 食指数据
-            for (int i = 555; i < 740; ++i) {
-                array.data.push_back(new_data[i] != 0 ? 1 : 0);
-            }
-
-            // 大拇指数据
-            for (int i = 740; i < 950; ++i) {
-                array.data.push_back(new_data[i] != 0 ? 1 : 0);
-            }
-
-            // 掌心数据
-            for (int i = 950; i < 1062; ++i) {
-                array.data.push_back(new_data[i] != 0 ? 1 : 0);
-            }
-        }
+    	for (size_t i = 0; i < new_data.size(); ++i) { // 遍历整个 new_data
+        array.data.push_back(new_data[i] != 0 ? 1 : 0); // 添加到 array.data
+    }
+}
 
         // 发布数组格式的数据
         pub->publish(array);
@@ -191,4 +164,3 @@ int main(int argc, char *argv[]) {
     rclcpp::shutdown();
     return 0;
 }
-
