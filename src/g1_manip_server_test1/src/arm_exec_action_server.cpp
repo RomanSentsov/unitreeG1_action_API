@@ -7,11 +7,13 @@
     #include <cmath>
     #include <array>
     #include <vector>
+    #include <cstdint>
     #include <unordered_map>
     #include <unordered_set>
     #include <string>
     #include <optional>
     #include <mutex>
+    #include <sstream>
 
     #include "rclcpp/rclcpp.hpp"
     #include "rclcpp_action/rclcpp_action.hpp"
@@ -1362,30 +1364,78 @@
         // DFTP_hand_control – обёртки для жестов
         // ====================================================================
 
-        bool execute_hand_gesture(dftp_hand::HandSide side, dftp_hand::Gesture gesture, int stabilization_ms = 600) {
-            std::lock_guard<std::mutex> lock(state_mutex_);
-            if (enable_control_ != EnableControl::ENABLED) {
-                RCLCPP_ERROR(this->get_logger(), "Gesture rejected: robot not ENABLED");
-                return false;
+        std::string hand_side_to_string(dftp_hand::HandSide side) const {
+            return (side == dftp_hand::HandSide::LEFT) ? "LEFT" : "RIGHT";
+        }
+
+        std::string hand_gesture_to_string(dftp_hand::Gesture gesture) const {
+            switch (gesture) {
+                case dftp_hand::Gesture::FREE_WRIST: return "FREE_WRIST";
+                case dftp_hand::Gesture::POINT_BUTTON: return "POINT_BUTTON";
+                case dftp_hand::Gesture::GRASP_HANDLE_PREP: return "GRASP_HANDLE_PREP";
+                case dftp_hand::Gesture::GRASP_DOOR_HANDLE: return "GRASP_DOOR_HANDLE";
+                case dftp_hand::Gesture::GRASP_PASS_PREP: return "GRASP_PASS_PREP";
+                case dftp_hand::Gesture::GRASP_PASS: return "GRASP_PASS";
+                case dftp_hand::Gesture::FUCK_YOU: return "FUCK_YOU";
             }
-            if (!hand_controller_) {
-                RCLCPP_ERROR(this->get_logger(), "Hand controller not initialized");
-                return false;
+            return "UNKNOWN";
+        }
+
+        std::string actual_positions_to_string(const std::array<int16_t, 6>& actual) const {
+            std::ostringstream oss;
+            oss << "[";
+            for (size_t i = 0; i < actual.size(); ++i) {
+                if (i > 0) {
+                    oss << ", ";
+                }
+                oss << actual[i];
+            }
+            oss << "]";
+            return oss.str();
+        }
+
+        bool execute_hand_gesture(dftp_hand::HandSide side, dftp_hand::Gesture gesture) {
+            dftp_hand::HandController* controller = nullptr;
+            {
+                std::lock_guard<std::mutex> lock(state_mutex_);
+                if (enable_control_ != EnableControl::ENABLED) {
+                    RCLCPP_ERROR(this->get_logger(), "Gesture rejected: robot not ENABLED");
+                    return false;
+                }
+                if (!hand_controller_) {
+                    RCLCPP_ERROR(this->get_logger(), "Hand controller not initialized");
+                    return false;
+                }
+                controller = hand_controller_.get();
             }
 
             try {
-                std::string side_str = (side == dftp_hand::HandSide::LEFT) ? "LEFT" : "RIGHT";
-                RCLCPP_INFO(this->get_logger(), "Executing command on %s hand...", side_str.c_str());
+                const std::string side_str = hand_side_to_string(side);
+                const std::string gesture_str = hand_gesture_to_string(gesture);
+                RCLCPP_INFO(
+                    this->get_logger(),
+                    "Executing gesture %s on %s hand...",
+                    gesture_str.c_str(),
+                    side_str.c_str());
 
-                // Библиотека dftp_hand_control блокирует поток до получения ответа от драйвера
-                hand_controller_->executeGesture(side, gesture);
-
-                // Дополнительная синхронизация: ждём стабилизации пальцев перед следующей командой руки
-                std::this_thread::sleep_for(std::chrono::milliseconds(stabilization_ms));
+                auto result = controller->executeGesture(side, gesture);
+                if (!result.ok()) {
+                    RCLCPP_ERROR(
+                        this->get_logger(),
+                        "Gesture failed on %s hand: %s",
+                        side_str.c_str(),
+                        result.message.empty() ? "no details" : result.message.c_str());
+                    return false;
+                }
+                RCLCPP_INFO(
+                    this->get_logger(),
+                    "Gesture %s on %s hand completed: actual=%s",
+                    gesture_str.c_str(),
+                    side_str.c_str(),
+                    actual_positions_to_string(result.actual_positions).c_str());
                 return true;
             } catch (const std::exception& e) {
                 RCLCPP_ERROR(this->get_logger(), "Gesture execution failed: %s", e.what());
-                // emergency();
                 return false;
             }
         }
@@ -1393,15 +1443,34 @@
         // Для управления обеими кистями одновременно
         bool execute_parallel_gestures(
             dftp_hand::HandSide left_side, dftp_hand::Gesture left_gesture,
-            dftp_hand::HandSide right_side, dftp_hand::Gesture right_gesture,
-            int stabilization_ms = 600) {
+            dftp_hand::HandSide right_side, dftp_hand::Gesture right_gesture) {
 
-            std::lock_guard<std::mutex> lock(state_mutex_);
-            if (enable_control_ != EnableControl::ENABLED || !hand_controller_) return false;
+            dftp_hand::HandController* controller = nullptr;
+            {
+                std::lock_guard<std::mutex> lock(state_mutex_);
+                if (enable_control_ != EnableControl::ENABLED || !hand_controller_) return false;
+                controller = hand_controller_.get();
+            }
 
             try {
-                hand_controller_->executeGestureParallel(left_side, left_gesture, right_side, right_gesture);
-                std::this_thread::sleep_for(std::chrono::milliseconds(stabilization_ms));
+                auto result = controller->executeGestureParallel(left_side, left_gesture, right_side, right_gesture);
+                if (!result.ok()) {
+                    RCLCPP_ERROR(
+                        this->get_logger(),
+                        "Parallel gesture failed: first='%s', second='%s'",
+                        result.first.message.empty() ? "no details" : result.first.message.c_str(),
+                        result.second.message.empty() ? "no details" : result.second.message.c_str());
+                    return false;
+                }
+                RCLCPP_INFO(
+                    this->get_logger(),
+                    "Parallel gestures completed: %s/%s actual=%s, %s/%s actual=%s",
+                    hand_side_to_string(left_side).c_str(),
+                    hand_gesture_to_string(left_gesture).c_str(),
+                    actual_positions_to_string(result.first.actual_positions).c_str(),
+                    hand_side_to_string(right_side).c_str(),
+                    hand_gesture_to_string(right_gesture).c_str(),
+                    actual_positions_to_string(result.second.actual_positions).c_str());
                 return true;
             } catch (const std::exception& e) {
                 RCLCPP_ERROR(this->get_logger(), "Parallel gesture failed: %s", e.what());
@@ -1499,12 +1568,20 @@
             move_to_pose(0.33, -0.31, 0.4);
             std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
-            execute_hand_gesture(dftp_hand::HandSide::RIGHT, dftp_hand::Gesture::POINT_BUTTON, 800);
+            if (!execute_hand_gesture(dftp_hand::HandSide::RIGHT, dftp_hand::Gesture::POINT_BUTTON)) {
+                RCLCPP_WARN(
+                    this->get_logger(),
+                    "POINT_BUTTON gesture failed on right hand; continuing button press sequence.");
+            }
 
             move_to_pose(0.44, -0.24, 0.4);
             std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
-            execute_hand_gesture(dftp_hand::HandSide::RIGHT, dftp_hand::Gesture::FREE_WRIST, 800);
+            if (!execute_hand_gesture(dftp_hand::HandSide::RIGHT, dftp_hand::Gesture::FREE_WRIST)) {
+                RCLCPP_WARN(
+                    this->get_logger(),
+                    "FREE_WRIST gesture failed on right hand; continuing button press sequence.");
+            }
 
             move_to_pose(0.33, -0.31, 0.4);
             std::this_thread::sleep_for(std::chrono::milliseconds(2000));
@@ -1591,7 +1668,9 @@
             RCLCPP_INFO(get_logger(), "Waiting for robot to move to default pose...");
             std::this_thread::sleep_for(std::chrono::milliseconds(2000));  // 2 секунды на движение
             
-            execute_hand_gesture(dftp_hand::HandSide::LEFT, dftp_hand::Gesture::POINT_BUTTON, 800);
+            if (!execute_hand_gesture(dftp_hand::HandSide::LEFT, dftp_hand::Gesture::POINT_BUTTON)) {
+                RCLCPP_WARN(get_logger(), "Failed to prepare left hand for neural action; continuing.");
+            }
 
             if (!neural_manager_->start("button_press", model_path, timeout)) {
                 RCLCPP_ERROR(get_logger(), "Failed to start neural manager");
@@ -1622,7 +1701,9 @@
             // Даём 5 мс, чтобы command_generator перешёл в HOLDING_POSE
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
-            execute_hand_gesture(dftp_hand::HandSide::LEFT, dftp_hand::Gesture::FREE_WRIST, 500);
+            if (!execute_hand_gesture(dftp_hand::HandSide::LEFT, dftp_hand::Gesture::FREE_WRIST)) {
+                RCLCPP_WARN(get_logger(), "Failed to release left hand after neural action; continuing shutdown.");
+            }
             soft_disable();
             
             is_busy_ = false;
