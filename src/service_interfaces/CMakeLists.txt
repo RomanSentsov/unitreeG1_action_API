@@ -13,12 +13,19 @@ find_package(std_msgs REQUIRED)
 
 include_directories(include ${ament_INCLUDE_DIRS})
 
-# 使用 rosidl_generate_interfaces 来生成服务
-rosidl_generate_interfaces(${PROJECT_NAME}
+# The current Modbus driver implements only these services.
+set(SUPPORTED_HAND_SERVICES
+  "srv/Setpos.srv"
+  "srv/Setforce.srv"
+  "srv/Setspeed.srv"
+  "srv/Getposact.srv"
+)
+
+# Vendor API declarations kept for compatibility/reserved future support.
+set(RESERVED_VENDOR_SERVICES
   "srv/Getcurrentact.srv"
   "srv/Geterror.srv"
   "srv/Getposset.srv"
-  "srv/Getposact.srv"
   "srv/Getspeedset.srv"
   "srv/Getforceact.srv"
   "srv/Getforceset.srv"
@@ -29,18 +36,21 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   
   "srv/Setid.srv"
   "srv/Setreduratio.srv"
-  "srv/Setpos.srv"
   "srv/Setclearerror.srv"
   "srv/Setresetpara.srv"
   "srv/Setdefaultspeed.srv"
-  "srv/Setspeed.srv"
   "srv/Setangle.srv"
   "srv/Setsaveflash.srv"
-  "srv/Setforce.srv"
   "srv/Setdefaultforce.srv"
   "srv/Setforceclb.srv"
   "srv/Setcurrentlimit.srv"
   "srv/Setgestureno.srv"
+)
+
+# 使用 rosidl_generate_interfaces 来生成服务
+rosidl_generate_interfaces(${PROJECT_NAME}
+  ${SUPPORTED_HAND_SERVICES}
+  ${RESERVED_VENDOR_SERVICES}
   DEPENDENCIES std_msgs
 )
 
@@ -52,4 +62,3 @@ endif()
 
 # 最后，调用 ament_package()
 ament_package()
-
