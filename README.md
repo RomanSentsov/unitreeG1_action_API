@@ -1,311 +1,203 @@
-# unitreeG1_action_API
+# Сервер манипуляции для робота Unitree G1 (ROS2)
 
-Репозиторий ros2 интеграции задачи по действиям робота
+Репозиторий содержит ROS2-пакет `g1_manip_server_test1`, реализующий:
 
-Требования:
-
-ros2 humble
-
-moveit
-
-unitree_ros2
-
-## 📋 Обзор манипуляции с кистями
-
-Данный модуль реализует интеграцию библиотеки `dftp_hand_control` в низкоуровневый сервер манипуляции `g1_manip_server_test1` для выполнения комплексных действий вида:
-
-Переместить руку → Выполнить жест кистью → Вернуться в безопасное состояние
-
-## 🏗 Архитектура
-```text
-┌────────────────────────────────────────┐
-│  g1_manip_server_test1                 │
-│  ┌─────────────────────────────────┐   │
-│  │ ManipulationActionServer        │   │
-│  │                                 │   │
-│  │ • enable()                      │   │
-│  │ • move_to_pose(x,y,z,q)         │   │
-│  │ • emergency()                   │   │
-│  │ • execute_hand_gesture() ◄──────┼───┐
-│  │ • execute_parallel_gestures()   │   │
-│  │                                 │   │
-│  │ • hand_controller_              │   │
-│  │   (unique_ptr<HandController>)  │   │
-│  └─────────────────────────────────┘   │
-└────────────────┬───────────────────────┘
-                 │ std::shared_ptr<rclcpp::Node>
-                 ▼
-┌────────────────────────────────────────┐
-│  dftp_hand_control                     │
-│  ┌─────────────────────────────────┐   │
-│  │ HandController                  │   │
-│  │                                 │   │
-│  │ • executeGesture(side, gesture) │   │
-│  │ • executeGestureParallel(...)   │   │
-│  │ • enum Gesture                  │   │
-│  │ • enum HandSide                 │   │
-│  └─────────────────────────────────┘   │
-└────────────────┬───────────────────────┘
-                 │ ROS 2 Service Client
-                 ▼
-┌─────────────────────────────────────────┐
-│  inspire_hand_modbus_ros2               │
-│  (Modbus TCP → Inspire Hand)            │
-└─────────────────────────────────────────┘
-```
-### Ключевые принципы
-- **Инкапсуляция**: Сервер манипуляции не работает с топиками/сервисами кистей напрямую — всё абстрагировано через `HandController`.
-- **Синхронность**: Все методы `execute_*` являются **блокирующими** и возвращают управление только после подтверждения от драйвера.
-- **Потокобезопасность**: Вызовы жестов защищены мьютексом `state_mutex_` и проверяют флаг `enable_control_`.
+- Планирование движений для **обеих рук** (левой и правой) через MoveIt (декартово и суставное пространство).
+- Инференс **RL-политик** (В частности, `Button_Press_UB.pt`) через интеграцию с LibTorch.
+- **Управление кистями** (Inspire Hand) через библиотеку `dftp_hand_control` (жесты: `POINT_BUTTON`, `FREE_WRIST`, `GRASP_DOOR_HANDLE` и др.).
+- **Динамическое обновление цели** из топика `/detected_handle/xyz` (CV-модуль).
 
 ---
 
-## 📦 Зависимости
+## Требования
 
-### Системные
-- ROS 2 Humble Hawksbill
-- C++17 или новее
-- `colcon` build system
-
-### ROS 2 пакеты
-```xml
-<!-- package.xml -->
-<depend>dftp_hand_control</depend>
-<depend>inspire_hand_modbus_ros2</depend>
-<depend>service_interfaces</depend>
-<depend>unitree_hg</depend>
-<depend>moveit_msgs</depend>
-<depend>trajectory_msgs</depend>
-```
-
-### CMake конфигурация
-```cmake
-# CMakeLists.txt
-find_package(dftp_hand_control REQUIRED)
-find_package(service_interfaces REQUIRED)
-
-ament_target_dependencies(arm_exec_action_server
-  # ... остальные зависимости ...
-  dftp_hand_control
-  service_interfaces
-)
-
-target_link_libraries(arm_exec_action_server
-  ${unitree_hg_LIBRARIES}
-  dftp_hand_control::hand_controller_lib
-)
-```
+- **ROS2 Humble**
+- **MoveIt 2** (с конфигурацией для G1)
+- **Unitree ROS2** (`unitree_hg`, `unitree_go` и др.)
+- **LibTorch** (C++ библиотека PyTorch) – для инференса нейросетей
+- **dftp_hand_control** и **inspire_hand_modbus_ros2** – для управления кистями
+- **colcon** (система сборки)
 
 ---
 
-## 💻 API для разработчика
+## Сборка на чистом роботе
 
-### Методы класса `ManipulationActionServer`
-
-#### Выполнение жеста на одной кисти
-```cpp
-/**
- * @brief Выполняет жест на указанной кисти синхронно
- * @param side Левая или правая кисть (dftp_hand::HandSide)
- * @param gesture Тип жеста из enum dftp_hand::Gesture
- * @param stabilization_ms Задержка после выполнения для стабилизации пальцев (по умолчанию 600 мс)
- * @return true при успешном выполнении, false при ошибке
- */
-bool execute_hand_gesture(
-    dftp_hand::HandSide side, 
-    dftp_hand::Gesture gesture, 
-    int stabilization_ms = 600);
-```
-
-#### Параллельное выполнение жестов на двух кистях
-```cpp
-/**
- * @brief Выполняет жесты на обеих кистях одновременно
- * @param left_side Сторона левой кисти
- * @param left_gesture Жест для левой кисти
- * @param right_side Сторона правой кисти
- * @param right_gesture Жест для правой кисти
- * @param stabilization_ms Задержка стабилизации (по умолчанию 600 мс)
- * @return true при успешном выполнении обоих жестов
- */
-bool execute_parallel_gestures(
-    dftp_hand::HandSide left_side, dftp_hand::Gesture left_gesture,
-    dftp_hand::HandSide right_side, dftp_hand::Gesture right_gesture,
-    int stabilization_ms = 600);
-```
-
-### Доступные жесты (`enum Gesture`)
-| Жест | Описание | Применение |
-|------|----------|------------|
-| `FREE_WRIST` | Разжатая кисть, свободное запястье | Исходное состояние, отпускание объекта |
-| `POINT_BUTTON` | Вытянутый указательный палец | Нажатие кнопок, указание |
-| `GRASP_HANDLE_PREP` | Подготовка к захвату ручки | Пре-граб дверной ручки |
-| `GRASP_DOOR_HANDLE` | Захват дверной ручки | Поворот ручки двери |
-| `GRASP_PASS_PREP` | Подготовка к передаче объекта | Пре-граб для передачи |
-| `GRASP_PASS` | Захват для передачи | Фиксация объекта при передаче |
-
-### Доступные стороны (`enum HandSide`)
-```cpp
-dftp_hand::HandSide::LEFT   // Левая кисть
-dftp_hand::HandSide::RIGHT  // Правая кисть
-```
-
----
-
-## 🔁 Синхронизация и потокобезопасность
-
-### Почему вызовы являются блокирующими
-1. `HandController::executeGesture()` отправляет ROS 2 service request и ожидает ответа.
-2. Драйвер `inspire_hand_modbus_ros2` выполняет Modbus-команду и ждёт подтверждения от кисти.
-3. Только после получения `success==true` метод возвращает управление.
-
-### Дополнительная стабилизация
-Параметр `stabilization_ms` добавляет задержку после подтверждения драйвером для учёта:
-- Механической инерции сервоприводов пальцев
-- Времени на демпфирование вибраций
-- Гарантии статичного положения перед следующей командой руки
-
-### Пример безопасной последовательности
-```cpp
-void execute_complex_action() {
-    // 1. Включение
-    enable();
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-    // 2. Подход к точке (блокирующий)
-    if (!move_to_pose(0.33, -0.31, 0.4)) return;
-
-    // 3. Жест (блокирующий + стабилизация 800 мс)
-    if (!execute_hand_gesture(
-            dftp_hand::HandSide::RIGHT, 
-            dftp_hand::Gesture::POINT_BUTTON, 
-            800)) return;  // emergency() вызван внутри
-
-    // 4. Движение с активным жестом (только после полной фиксации пальцев!)
-    move_to_pose(0.44, -0.24, 0.4);
-
-    // ... дальнейшие действия
-}
-```
-
----
-
-## 🚀 Запуск
-
-### Предварительные требования
-1. Сеть: Убедитесь, что Робот имеет доступ к IP-адресам кистей по Modbus TCP.
-
-<!-- ### Сборка проекта
+### 1. Установите системные зависимости
 ```bash
-cd ~/your_ws
-colcon build --packages-select g1_manip_server_test1 --event-handlers console_direct+
-source install/setup.bash
-``` -->
+sudo apt update
+sudo apt install ros-humble-desktop ros-humble-moveit ros-humble-ros2-control ros-humble-ros2-controllers
+```
 
-### Сборка проекта
+### 2. Клонируйте репозиторий
 ```bash
-cd ~/unitreeG1_action_API-main
-colcon build --packages-up-to g1_manip_server_test1
+mkdir -p ~/unitree_ws/src
+cd ~/unitree_ws/src
+git clone https://github.com/RomanSentsov/unitreeG1_action_API.git
+cd ..
+```
+
+### 3. Установите недостающие пакеты
+```bash
+# unitree_ros2
+git clone https://github.com/unitreerobotics/unitree_ros2.git src/unitree_ros2
+
+# dftp_hand_control и inspire_hand_modbus_ros2
+git clone https://github.com/your-org/dftp_hand_control.git src/dftp_hand_control
+git clone https://github.com/your-org/inspire_hand_modbus_ros2.git src/inspire_hand_modbus_ros2
+```
+
+### 4. Установите LibTorch для ARM64
+Скачайте сборку LibTorch для ARM64 (например, с сайта PyTorch) и распакуйте в `/home/unitree/libtorch_arm64` (или укажите другой путь, затем обновите `LD_LIBRARY_PATH`).
+
+### 5. Соберите рабочее пространство
+```bash
+cd ~/unitree_ws
+rosdep install --from-paths src --ignore-src -r -y
+colcon build --packages-up-to g1_manip_server_test1 --executor sequential --parallel-workers 1
 source install/setup.bash
 ```
 
-### Порядок запуска (4 терминала)
+---
 
-**Терминал 1: Инициализация окружения и планировщик**
+## Запуск
+
+Откройте **4 терминала** и выполните:
+
+### Терминал 1: MoveIt (планировщик)
 ```bash
-cd ~/g1_test_packages_ws
-source install/setup.bash
-
-# Запуск MoveIt (предоставляет сервис /plan_kinematic_path для планирования траекторий)
 ros2 launch g1_moveit_desc_v3 move_group.launch.py
 ```
+> Если используются кисти Inspire Hand, замените на:  
+> `ros2 launch g1_moveit_desc_ftp move_group.launch.py`
 
-**Терминал 2: Низкоуровневый драйвер кистей**
+### Терминал 2: Драйвер кистей (Modbus)
 ```bash
-cd ~/unitreeG1_action_API-main
-source install/setup.bash
 ros2 run inspire_hand_modbus_ros2 hand_modbus_control_node
 ```
 
-**Терминал 3: Сервер манипуляции**
+### Терминал 3: Сервер манипуляции
 ```bash
-cd ~/unitreeG1_action_API-main
+cd ~/unitree_ws
 source install/setup.bash
+export LD_LIBRARY_PATH=/home/unitree/libtorch_arm64/lib:$LD_LIBRARY_PATH
 ros2 run g1_manip_server_test1 arm_exec_action_server
 ```
 
-**Терминал 4: Отправка комплексного действия**
+### Терминал 4: Отправка команды (goal)
 ```bash
-cd ~/g1_test_packages_ws
+cd ~/unitree_ws
 source install/setup.bash
 
-# Запуск последовательности: Подход → Жест (POINT_BUTTON) → Отход
+# Пример: выполнить последовательность с жестами (action_code 0)
 ros2 action send_goal /r_arm_plan_exec g1_manip_interf_test1/action/TestServerExec "{action_code: 0}" --feedback
+
+# Пример: запустить RL-политику "нажатие кнопки" (action_code 1)
+ros2 action send_goal /r_arm_plan_exec g1_manip_interf_test1/action/TestServerExec "{action_code: 1}"
 ```
 
 ---
 
-<!-- ### Логирование
-Уровень логирования можно изменить для отладки:
-```bash
-# Подробные логи кистей
-ros2 run g1_manip_server_test1 arm_exec_action_server --ros-args --log-level dftp_hand_control:=DEBUG
+## API для скриптования действий
 
-# Только ошибки
-ros2 run g1_manip_server_test1 arm_exec_action_server --ros-args --log-level error
-``` -->
+**Управление состоянием**
 
----
+*enable()* – включить управление руками (перейти в состояние ENABLED).
 
-## 📁 Структура файлов интеграции
+*disable()* – отключить управление (DISABLED), остановить текущую траекторию.
 
-```
-g1_manip_server_test1/
-├── package.xml                          # Зависимости: dftp_hand_control, service_interfaces
-├── CMakeLists.txt                       # find_package + ament_target_dependencies + target_link_libraries
-└── src/
-    └── arm_exec_action_server.cpp       # Основной код:
-                                         # • #include "dftp_hand_control/hand_controller.hpp"
-                                         # • std::unique_ptr<HandController> hand_controller_
-                                         # • Инициализация в конструкторе
-                                         # • Методы execute_hand_gesture(), execute_parallel_gestures()
-                                         # • Обновлённые execute_* действия с жестами
-```
+*emergency()* – аварийный режим: обнулить усилия, перейти в демпфирование.
 
----
+**Движение руки (все методы блокирующие)**
 
-## 🔄 Расширение: добавление нового комплексного действия
+move_to_pose_left(x, y, z, roll=0, pitch=0, yaw=0) – спланировать и выполнить декартово движение левой руки.
 
-1. Добавьте новый `action_code` в `TestServerExec.action`:
-```action
-# robot_interfaces/action/Manipulate.action
-int32 BUTTON_PRESS_WITH_GESTURE=2
-```
+move_to_pose_right(x, y, z, roll=0, pitch=0, yaw=0) – аналогично для правой руки.
 
-2. Реализуйте обработчик в `handle_accepted`:
-```cpp
-case 2:  // BUTTON_PRESS_WITH_GESTURE
-    std::thread([this]() { execute_button_press_with_gesture(); }).detach();
-    break;
-```
+move_to_pose_angles_left(target_joint_angles) – движение левой руки в суставном пространстве (вектор из 7 углов в радианах).
 
-3. Создайте метод с нужной последовательностью:
-```cpp
-void execute_button_press_with_gesture() {
-    enable();
-    move_to_pose_safe(0.33, -0.31, 0.4);
-    execute_hand_gesture(dftp_hand::HandSide::RIGHT, dftp_hand::Gesture::POINT_BUTTON, 800);
-    move_to_pose_safe(0.44, -0.24, 0.4);
-    // ... ваша логика
-    disable();
-}
-```
+move_to_pose_angles_right(target_joint_angles) – аналогично для правой руки.
 
----
+move_to_default_pose() – перевести обе руки в дефолтную позу (DEFAULT_ANGLES_ACTIVE) через MoveIt.
 
-## 📄 Ссылки и демонстрации
+soft_disable() – вернуть обе руки в HOME_LEFT/HOME_RIGHT и выключить управление.
 
-- `dftp_hand_control, inspire_hand_modbus_ros2, работа кистей`: [[ссылка на гугл диск](https://drive.google.com/drive/folders/1yF2wz_ClhV5SBzENKPAhYA1ctDXb72rt?usp=drive_link)]
-- `TODO`: [TODO?]
+Пример простой последовательности:
 
-> ⚠️ **Важно**: Данный модуль требует физического подключения кистей Inspire Hand (DFTP) и корректной настройки Modbus TCP сети. Тестирование без кистей возможно только с запуском ноды драйвера.
+cpp
+enable();
+move_to_pose_left(0.3, -0.2, 0.5);   // подойти к точке
+execute_hand_gesture(HandSide::LEFT, Gesture::POINT_BUTTON, 800);
+move_to_pose_left(0.4, -0.2, 0.5);   // нажать
+soft_disable();
+
+**Управление кистями**
+
+Библиотека dftp_hand_control предоставляет следующие методы:
+
+execute_hand_gesture(HandSide side, Gesture gesture, int stabilization_ms = 600) – выполнить жест на одной кисти.
+
+execute_parallel_gestures(HandSide left_side, Gesture left_gesture, HandSide right_side, Gesture right_gesture, int stabilization_ms = 600) – выполнить жесты на обеих кистях одновременно.
+
+Перечисления:
+
+HandSide: LEFT, RIGHT
+
+Gesture:
+
+FREE_WRIST – разжатая кисть, свободное запястье
+
+POINT_BUTTON – вытянутый указательный палец
+
+PREP_PREP_GRASP – подготовка к захвату (пре-граб)
+
+GRASP_DOOR_HANDLE – захват дверной ручки
+
+GRASP_PASS_PREP – подготовка к передаче объекта
+
+GRASP_PASS – захват для передачи
+
+Важно: Все вызовы блокирующие – метод возвращает управление только после подтверждения от драйвера.
+Параметр stabilization_ms добавляет задержку для учёта инерции пальцев.
+
+**Запуск RL-политик (нейроуправление)**
+
+Action code 1 активирует режим NEURO_DRIVEN.
+
+Последовательность выполнения:
+
+enable()
+
+move_to_default_pose() – переход в дефолтную позу (обе руки)
+
+Выполняется жест POINT_BUTTON на левой кисти
+
+Запуск NeuralActionManager с таймаутом 10 с
+
+В цикле (каждые 2 мс) генерируются команды:
+
+getCurrentCommand → инференс сети (раз в 20 мс) → целевые углы q_target
+
+принудительное обнуление пояса (waist)
+
+асинхронная проверка коллизий через /check_state_validity (с сохранением последней безопасной команды)
+
+отправка MotorCommand в буфер
+
+По окончании таймаута: stop(), жест FREE_WRIST, soft_disable()
+
+Настройка политики:
+Путь к модели и параметры (OBS_DIM=57, ACT_DIM=17, масштабы) заданы в коде (планируется вынести в .yaml).
+
+**Использование CV (Computer Vision)**
+
+Сервер подписан на топик /detected_handle/xyz (geometry_msgs/PointStamped).
+Колбэк door_handle_callback:
+
+обновляет current_handle_xyz_
+
+вызывает neural_manager_->setGoalXYZ(current_handle_xyz_) – динамически обновляет цель для нейросети
+
+Это позволяет политике в реальном времени корректировать движение под меняющуюся позицию кнопки/ручки.
+
+
+*Unitree ROS2*
